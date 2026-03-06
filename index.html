@@ -329,6 +329,36 @@ const handleManualArticle = async (record) => {
     window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`, '_blank');
 };
 
+const handleShareRoute = (route) => {
+    const origin = `${EKALA.lat},${EKALA.lng}`;
+    const destination = `${route.waypoints[route.waypoints.length - 1].latitude},${route.waypoints[route.waypoints.length - 1].longitude}`;
+    const waypoints = route.waypoints.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
+    
+    // Create the Google Maps URL
+    const mapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+    
+    // Calculate total distance
+    const totalDist = route.waypoints.reduce((acc, curr) => acc + curr.distance_km, 0).toFixed(1);
+    
+    // Format the location list
+    const locationList = route.waypoints.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n');
+
+    const shareText = `📍 *${route.route_name}*\n\n` +
+                      `Total Distance: ${totalDist} KM\n\n` +
+                      `*Stops:*\n${locationList}\n\n` +
+                      `*View Journey Map:*\n${mapUrl}`;
+
+    if (navigator.share) {
+        navigator.share({
+            title: route.route_name,
+            text: shareText,
+        }).catch(console.error);
+    } else {
+        // Fallback to WhatsApp Web
+        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
+    }
+};
+
             const updateField = async (id, field, value) => {
                 const { error } = await supabaseClient.from('travel_bucket_list').update({ [field]: value }).eq('id', id);
                 if (!error) { fetchPlaces(); triggerToast('Updated'); }
@@ -433,16 +463,27 @@ const handleManualArticle = async (record) => {
                             </div>
 
                             <div className="bg-white rounded-[1.5rem] border p-4 shrink-0 shadow-sm mb-4 lg:mb-0">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">My Saved Plan History</label>
-                                <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-list">
-                                    {savedRoutes.map(r => (
-                                        <div key={r.id} className="group flex items-center gap-2">
-                                            <div onClick={()=>{setSelectedTrip(r.waypoints); setEditingRouteId(r.id); setActiveTab('list');}} className={`flex-1 p-2.5 rounded-xl border cursor-pointer text-[10px] font-black uppercase transition-all ${editingRouteId===r.id ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm':'bg-slate-50 hover:bg-slate-100'}`}>{r.route_name}</div>
-                                            <button onClick={()=>confirm("Delete plan?") && supabaseClient.from('saved_travel_routes').delete().eq('id', r.id).then(fetchSavedRoutes)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">My Saved Plan History</label>
+    <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-list">
+        {savedRoutes.map(r => (
+            <div key={r.id} className="group flex items-center gap-2">
+                <div onClick={()=>{setSelectedTrip(r.waypoints); setEditingRouteId(r.id); setActiveTab('list');}} 
+                     className={`flex-1 p-2.5 rounded-xl border cursor-pointer text-[10px] font-black uppercase transition-all ${editingRouteId===r.id ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm':'bg-slate-50 hover:bg-slate-100'}`}>
+                    {r.route_name}
+                </div>
+                
+                {/* Add Share Button */}
+                <button onClick={() => handleShareRoute(r)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100">
+                    <i data-lucide="share-2" className="w-4 h-4"></i>
+                </button>
+
+                <button onClick={()=>confirm("Delete plan?") && supabaseClient.from('saved_travel_routes').delete().eq('id', r.id).then(fetchSavedRoutes)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                    <i data-lucide="trash-2" className="w-4 h-4"></i>
+                </button>
+            </div>
+        ))}
+    </div>
+</div>
                         </div>
 
                         <div className={`scroll-column ${activeTab !== 'list' ? 'mobile-hidden' : 'mobile-list-view'}`}>
