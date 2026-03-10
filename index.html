@@ -437,6 +437,23 @@ const handleShareRoute = (route) => {
     }
 };
 
+const handleEditName = async (record) => {
+    const newName = prompt(`Edit name for ${record.place_name}:`, record.place_name);
+    if (!newName || newName === record.place_name) return;
+
+    const { error } = await supabaseClient
+        .from('travel_bucket_list')
+        .update({ place_name: newName })
+        .eq('id', record.id);
+
+    if (!error) {
+        fetchPlaces();
+        triggerToast("Name updated!");
+    } else {
+        triggerToast("Error updating name");
+    }
+};
+
             const updateMapElements = () => {
                 if (!mapRef.current) return;
                 markersLayer.current.clearLayers();
@@ -655,7 +672,13 @@ const handleShareRoute = (route) => {
             <div className="p-4 flex-1 flex flex-col min-h-0">
                 <div className="flex justify-between items-start gap-2 mb-3">
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-extrabold text-slate-800 text-[11px] uppercase truncate leading-tight">{p.place_name}</h3>
+                        <h3 
+    onClick={(e) => { e.stopPropagation(); handleEditName(p); }}
+    className="font-extrabold text-slate-800 text-[11px] uppercase truncate leading-tight hover:text-blue-600 cursor-edit"
+    title="Click to edit name"
+>
+    {p.place_name}
+</h3>
                         <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">{p.locality || 'Unknown Area'}</p>
                     </div>
                     <span className="text-[9px] font-black text-slate-400 italic shrink-0">{p.distance_km} KM</span>
