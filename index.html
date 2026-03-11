@@ -495,25 +495,27 @@ const logVisit = async () => {
     if (sessionStorage.getItem('visit_logged')) return;
 
     try {
-        // Fetch geographic data via IP
+        // Fetch geo-data via IP
         const geoRes = await fetch('https://ipapi.co/json/');
         const geo = await geoRes.json();
 
+        // Send combined data to Supabase
         const { error } = await supabaseClient
             .from('page_visits')
             .insert([{
                 page_path: window.location.pathname,
                 user_agent: navigator.userAgent,
-                country: geo.country_name || 'Unknown', // New field
-                region: geo.region || 'Unknown',      // New field
-                city: geo.city || 'Unknown'           // New field
+                country: geo.country_name || 'Unknown',
+                region: geo.region || 'Unknown',
+                city: geo.city || 'Unknown'
             }]);
         
         if (!error) {
             sessionStorage.setItem('visit_logged', 'true');
         }
     } catch (err) {
-        // Fallback if the geo-API is blocked by an ad-blocker
+        console.error("Analytics Error:", err.message);
+        // Fallback to basic log if Geo-API fails
         await supabaseClient.from('page_visits').insert([{
             page_path: window.location.pathname,
             user_agent: navigator.userAgent
@@ -525,21 +527,42 @@ const logVisit = async () => {
 
 
 const fetchAnalytics = async () => {
-    // Audit: Select country and region columns as well
     const { data, error } = await supabaseClient
         .from('page_visits')
-        .select('user_agent, country, region, created_at');
+        .select('user_agent, country, region, city, created_at');
 
     if (error) return console.error("Analytics Error:", error);
 
     if (data) {
-        const statsMap = data.reduce((acc, visit) => {
-            // Priority: Use Location string if available, otherwise fallback to User Agent
-            const locationLabel = visit.country 
-                ? `📍 ${visit.city || visit.region}, ${visit.country}`
-                : visit.user_agent.split(' ')[0]; // Fallback to short UA
+        // Map hardware IDs to the names you provided
+        const modelMapping = {
+            'iPhone13,2': 'iPhone 12 Pro',
+            'iPhone9,1': 'iPhone 7',
+            'iPhone9,3': 'iPhone 7'
+        };
 
-            acc[locationLabel] = (acc[locationLabel] || 0) + 1;
+        const statsMap = data.reduce((acc, visit) => {
+            const ua = visit.user_agent;
+            let deviceLabel = "Other Device";
+
+            // Identify specific devices from your hardware list
+            if (/iPhone/i.test(ua)) {
+                const fbdvMatch = ua.match(/FBDV\/(iPhone[\d,]+)/);
+                deviceLabel = fbdvMatch ? (modelMapping[fbdvMatch[1]] || "iPhone") : "iPhone";
+            } else if (/Ubuntu/i.test(ua)) {
+                deviceLabel = "Ubuntu PC";
+            } else if (/Windows/i.test(ua)) {
+                deviceLabel = "Windows PC";
+            }
+
+            // Construct the requested format: [Device - Location/Country/Region]
+            const location = visit.country 
+                ? `${visit.city || visit.region}, ${visit.country}` 
+                : "Unknown Location";
+            
+            const combinedLabel = `${deviceLabel} — ${location}`;
+            
+            acc[combinedLabel] = (acc[combinedLabel] || 0) + 1;
             return acc;
         }, {});
 
