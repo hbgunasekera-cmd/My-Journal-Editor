@@ -492,22 +492,32 @@ const handleEditName = async (record) => {
 };
 
 const logVisit = async () => {
-    
     if (sessionStorage.getItem('visit_logged')) return;
 
     try {
+        // Fetch geographic data via IP
+        const geoRes = await fetch('https://ipapi.co/json/');
+        const geo = await geoRes.json();
+
         const { error } = await supabaseClient
             .from('page_visits')
             .insert([{
                 page_path: window.location.pathname,
-                user_agent: navigator.userAgent
+                user_agent: navigator.userAgent,
+                country: geo.country_name || 'Unknown', // New field
+                region: geo.region || 'Unknown',      // New field
+                city: geo.city || 'Unknown'           // New field
             }]);
         
         if (!error) {
             sessionStorage.setItem('visit_logged', 'true');
         }
     } catch (err) {
-        console.error("Analytics Error:", err.message);
+        // Fallback if the geo-API is blocked by an ad-blocker
+        await supabaseClient.from('page_visits').insert([{
+            page_path: window.location.pathname,
+            user_agent: navigator.userAgent
+        }]);
     }
 };
 
