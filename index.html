@@ -721,7 +721,7 @@ const fetchAnalytics = async () => {
 
                         <div className={`scroll-column ${activeTab !== 'list' ? 'mobile-hidden' : 'mobile-list-view'}`}>
                         
-                        {/* Analytics Dashboard Section */}
+{/* Analytics Dashboard Section */}
 <div className="bg-slate-900 rounded-[1.5rem] p-5 mb-4 text-white shadow-xl">
     <div className="flex justify-between items-center mb-4">
         <div>
@@ -733,17 +733,18 @@ const fetchAnalytics = async () => {
         </button>
     </div>
 
-    <div className="space-y-3">
-        {analytics.pathStats.slice(0, 3).map((stat, idx) => (
-            <div key={idx} className="space-y-1">
+    {/* Scrollable Container for Device List */}
+    <div className="space-y-4 max-h-[180px] overflow-y-auto pr-2 scrollable-list">
+        {analytics.pathStats.map((stat, idx) => (
+            <div key={idx} className="space-y-1.5">
                 <div className="flex justify-between text-[9px] font-black uppercase">
-                    <span className="truncate w-32">{stat.path === '/' ? 'Home / Map' : stat.path}</span>
-                    <span>{stat.count} Hits</span>
+                    <span className="truncate flex-1 pr-2">{stat.path}</span>
+                    <span className="text-slate-400">{stat.count} Hits</span>
                 </div>
                 {/* Visual Bar Chart */}
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                     <div 
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500" 
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" 
                         style={{ width: `${(stat.count / analytics.total) * 100}%` }}
                     ></div>
                 </div>
