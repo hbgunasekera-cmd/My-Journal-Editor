@@ -13,163 +13,167 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        
-        /* General Reset & Layout Lock */
-        body { 
-            font-family: 'Plus Jakarta Sans', sans-serif; 
-            background-color: #F8FAFC; 
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* Prevents double scrollbars */
-            height: 100vh;
-            width: 100vw;
-        }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    
+    /* General Reset & Layout Lock */
+    body { 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+        background-color: #F8FAFC; 
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Prevents double scrollbars */
+        height: 100vh;
+        width: 100vw;
+    }
 
-        /* Desktop Grid Fixes */
-        @media (min-width: 1024px) { 
-            .main-grid { 
-                display: grid; 
-                /* Using % ensures the total width never exceeds 100% including gaps */
-                grid-template-columns: 58% 40%; 
-                height: calc(100vh - 80px); 
-                padding: 1rem; 
-                gap: 2%; 
-                width: 100%;
-                box-sizing: border-box;
-            } 
-            .scroll-column { 
-                overflow-y: auto; 
-                height: 100%; 
-                padding-right: 8px; 
-                min-width: 0; /* Critical: allows grid items to shrink and stay contained */
-            }
-            .map-wrapper { 
-                height: 100%; 
-                min-height: 0; 
-                display: flex; 
-                flex-direction: column; 
-                gap: 1rem; 
-            }
-        }
-
-        /* Mobile Adjustments */
-        @media (max-width: 1023px) {
-            .main-grid { 
-                display: flex; 
-                flex-direction: column; 
-                height: calc(100vh - 130px); 
-                padding: 0.75rem; 
-                width: 100%;
-                box-sizing: border-box;
-                overflow: hidden;
-            }
-            .mobile-hidden { display: none !important; }
-            .mobile-map-view { 
-                height: 100%; 
-                display: flex; 
-                flex-direction: column; 
-                gap: 1rem; 
-            }
-            .mobile-list-view { 
-                height: 100%; 
-                overflow-y: auto; 
-            }
-            #map-container { 
-                height: 55vh !important; /* Adjusted to prevent overflow */
-                flex-shrink: 0;
-            }
-        }
-
-        /* Custom Scrollbar */
-        .scrollable-list::-webkit-scrollbar { width: 5px; }
-        .scrollable-list::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
-        
-        /* Map Container Base */
-        #map-container { 
-            flex-grow: 1;
-            width: 100%; 
-            border-radius: 1.5rem; 
-            z-index: 1; 
-            background: #e5e7eb; 
-            position: relative; 
-            min-height: 300px;
-        }
-        
-        /* Marker & Legend Styles (Strictly Preserved) */
-        .marker-pending { background-color: #f97316; border: 2px solid white; border-radius: 50%; }
-        .marker-done { background-color: #10b981; border: 2px solid white; border-radius: 50%; }
-        .marker-locked { background-color: #a855f7; border: 2px solid white; border-radius: 50%; }
-        .marker-selected { background-color: #ef4444; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; }
-        
-        .marker-hover { 
-            background-color: #facc15; 
-            border: 3px solid white; 
-            border-radius: 50%; 
-            box-shadow: 0 0 20px rgba(250, 204, 21, 1); 
-            z-index: 9999 !important; 
-        }
-
-        @keyframes smart-pulse { 
-            0% { box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.7); } 
-            100% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 
-        }
-        .marker-smart { background-color: #3b82f6; border: 2px solid white; border-radius: 50%; animation: smart-pulse 2s infinite; }
-
-        .map-legend { 
-            position: absolute; 
-            top: 12px; 
-            right: 12px; 
-            z-index: 1000; 
-            background: white; 
-            padding: 8px 12px; 
-            border-radius: 12px; 
-            border: 1px solid #e2e8f0; 
-            font-size: 8px; 
-            font-weight: 800; 
-            text-transform: uppercase; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 4px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-        }
-        
-        .location-tooltip {
-            background: rgba(15, 23, 42, 0.9);
-            border: none;
-            border-radius: 4px;
-            color: white;
-            font-size: 8px;
-            font-weight: 800;
-            padding: 2px 6px;
-            text-transform: uppercase;
-        }
-
-        .location-card {
-            border: 2px solid transparent;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+    /* Desktop Grid Fixes */
+    @media (min-width: 1024px) { 
+        .main-grid { 
+            display: grid; 
+            /* FIXED: minmax prevents content and scrollbars from pushing grid boundaries */
+            grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); 
+            height: calc(100vh - 80px); 
+            padding: 1rem; 
+            gap: 2%; 
             width: 100%;
             box-sizing: border-box;
+            overflow: hidden;
+        } 
+        .scroll-column { 
+            overflow-y: auto; 
+            overflow-x: hidden;
+            height: 100%; 
+            padding-right: 8px; 
+            min-width: 0; 
+            /* FIXED: Force flex layout so Map can safely flex-grow without collapsing */
+            display: flex;
+            flex-direction: column;
+            /* FIXED: Reserves space for the scrollbar so the layout never pops */
+            scrollbar-gutter: stable;
         }
+        .map-wrapper { 
+            flex-grow: 1; 
+            min-height: 350px; 
+            display: flex; 
+            flex-direction: column; 
+            margin-bottom: 0 !important;
+        }
+        #map-container {
+            flex-grow: 1;
+            height: 100% !important; /* Forces Leaflet to respect the flex boundary */
+        }
+    }
 
-        .location-card:hover {
-            border-color: #CBD5E1;
-            transform: translateY(-2px);
+    /* Mobile Adjustments */
+    @media (max-width: 1023px) {
+        .main-grid { 
+            display: flex; 
+            flex-direction: column; 
+            height: calc(100vh - 130px); 
+            padding: 0.75rem; 
+            width: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
         }
-    </style>
+        .mobile-hidden { display: none !important; }
+        .mobile-map-view { 
+            height: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 1rem; 
+        }
+        .mobile-list-view { 
+            height: 100%; 
+            overflow-y: auto; 
+        }
+        #map-container { 
+            height: 55vh !important;
+            flex-shrink: 0;
+        }
+    }
+
+    /* FIXED: Universal Custom Scrollbar to prevent OS-level width shifts */
+    .scroll-column::-webkit-scrollbar,
+    .scrollable-list::-webkit-scrollbar { width: 6px; }
+    
+    .scroll-column::-webkit-scrollbar-thumb,
+    .scrollable-list::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+    
+    .scroll-column::-webkit-scrollbar-track,
+    .scrollable-list::-webkit-scrollbar-track { background: transparent; }
+    
+    /* Marker & Legend Styles (Strictly Preserved) */
+    .marker-pending { background-color: #f97316; border: 2px solid white; border-radius: 50%; }
+    .marker-done { background-color: #10b981; border: 2px solid white; border-radius: 50%; }
+    .marker-locked { background-color: #a855f7; border: 2px solid white; border-radius: 50%; }
+    .marker-selected { background-color: #ef4444; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; }
+    
+    .marker-hover { 
+        background-color: #facc15; 
+        border: 3px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 0 20px rgba(250, 204, 21, 1); 
+        z-index: 9999 !important; 
+    }
+
+    @keyframes smart-pulse { 
+        0% { box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.7); } 
+        100% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 
+    }
+    .marker-smart { background-color: #3b82f6; border: 2px solid white; border-radius: 50%; animation: smart-pulse 2s infinite; }
+
+    .map-legend { 
+        position: absolute; 
+        top: 12px; 
+        right: 12px; 
+        z-index: 1000; 
+        background: white; 
+        padding: 8px 12px; 
+        border-radius: 12px; 
+        border: 1px solid #e2e8f0; 
+        font-size: 8px; 
+        font-weight: 800; 
+        text-transform: uppercase; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 4px; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+    }
+    
+    .location-tooltip {
+        background: rgba(15, 23, 42, 0.9);
+        border: none;
+        border-radius: 4px;
+        color: white;
+        font-size: 8px;
+        font-weight: 800;
+        padding: 2px 6px;
+        text-transform: uppercase;
+    }
+
+    .location-card {
+        border: 2px solid transparent;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .location-card:hover {
+        border-color: #CBD5E1;
+        transform: translateY(-2px);
+    }
+</style>
 </head>
 <body>
     <div id="root"></div>
 
     <script>
         (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-            key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs",
-            v: "weekly"
+            key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", v: "weekly"
         });
     </script>
 
@@ -197,63 +201,115 @@
             const [toastMsg, setToastMsg] = useState('Updated');
             const [newLocationCategory, setNewLocationCategory] = useState('Location');
             const [tempLocation, setTempLocation] = useState(null);
-            const [isSyncing, setIsSyncing] = useState(false);
+            
             const mapRef = useRef(null);
             const markersLayer = useRef(L.layerGroup());
             const hoverLayer = useRef(L.layerGroup());
             const polylineRef = useRef(null);
             const autocompleteRef = useRef(null);
-            const [analytics, setAnalytics] = useState({ total: 0, pathStats: [] });
             
+            const [analytics, setAnalytics] = useState({ total: 0, pathStats: [] });
+            const [interactionStats, setInteractionStats] = useState({ likes: [], comments: [] });
             
             useEffect(() => {
-    // 1. Log the session/visit
-    logVisit();
+                // 1. One-time Initializations
+                logVisit();
+                fetchAllAnalytics(); 
+                
+                const loadInitialData = async () => {
+                    await Promise.all([fetchPlaces(), fetchSavedRoutes()]);
+                };
+                loadInitialData();
 
-    // 2. Load core data from Supabase
-    const loadInitialData = async () => {
-        await Promise.all([fetchPlaces(), fetchSavedRoutes()]);
-    };
-    loadInitialData();
+                // 2. Map & Google API Setup
+                initGoogle();
+                const mapTimer = setTimeout(() => {
+                    initMap();
+                    if (window.lucide) window.lucide.createIcons();
+                }, 300);
 
-    // 3. Initialize Google/Map with a small delay for DOM rendering
-    initGoogle();
-    const mapTimer = setTimeout(() => {
-        initMap();
-        // Force an initial icon render once the map container exists
-        if (window.lucide) window.lucide.createIcons();
-    }, 300);
+                return () => clearTimeout(mapTimer);
+            }, []);
 
-    // Cleanup to prevent memory leaks or double-initialization
-    return () => clearTimeout(mapTimer);
-}, []);
+            useEffect(() => {
+                // 3. Reactive UI & Map Synchronization
+                updateMapElements();
+                if (window.lucide) window.lucide.createIcons();
+            }, [places, selectedTrip, filterTag, filterStatus, searchTerm, sortBy, hoveredPlaceId, activeTab]);
 
-useEffect(() => {
-    // Sync Map Visuals
-    updateMapElements();
+            const logVisit = async () => {
+                if (sessionStorage.getItem('visit_logged')) return;
 
-    // Re-trigger Lucide icons for any dynamically rendered cards/buttons
-    if (window.lucide) {
-        window.lucide.createIcons();
-    }
-}, [
-    places, 
-    selectedTrip, 
-    filterTag, 
-    filterStatus, 
-    searchTerm, 
-    sortBy, 
-    hoveredPlaceId, 
-    activeTab
-]);
+                try {
+                    const geoRes = await fetch('https://ipapi.co/json/');
+                    const geo = await geoRes.json();
 
+                    // IP and Browser verification to exclude your specific visits
+                    const isOwner = geo.ip === "2402:4000:b280:b2d:7056:9e2d:f09c:91cb" && navigator.userAgent.includes("rv:148.0");
 
+                    if (isOwner) {
+                        console.log("Owner visit detected. Skipping log.");
+                        return;
+                    }
+
+                    const { error } = await supabaseClient.from('page_visits').insert([{
+                        page_path: window.location.pathname,
+                        user_agent: navigator.userAgent,
+                        country: geo.country_name || 'Unknown',
+                        region: geo.region || 'Unknown',
+                        city: geo.city || 'Unknown',
+                        ip_address: geo.ip || 'Unknown'
+                    }]);
+                    
+                    if (!error) sessionStorage.setItem('visit_logged', 'true');
+                } catch (err) {
+                    // Fallback to basic logging if geo fails
+                    await supabaseClient.from('page_visits').insert([{
+                        page_path: window.location.pathname,
+                        user_agent: navigator.userAgent
+                    }]);
+                }
+            };
+
+            const fetchAllAnalytics = async () => {
+                const { data: visits } = await supabaseClient.from('page_visits').select('*');
+                const { data: likes } = await supabaseClient.from('location_likes').select('country, city');
+                const { data: comments } = await supabaseClient.from('location_comments').select('country, city');
+
+                const processStats = (data, isVisit = false) => {
+                    if (!data) return [];
+                    const statsMap = data.reduce((acc, item) => {
+                        let label;
+                        if (isVisit) {
+                            const ua = item.user_agent || "";
+                            let device = "Device";
+                            if (/iPhone/i.test(ua)) device = "iPhone";
+                            else if (/Ubuntu/i.test(ua)) device = "Ubuntu PC";
+                            else if (/Windows/i.test(ua)) device = "Windows PC";
+                            else if (/Android/i.test(ua)) device = "Android";
+                            else if (/Macintosh|Mac OS X/i.test(ua)) device = "MAC";
+                            
+                            const loc = [item.city, item.country].filter(Boolean).join(', ');
+                            label = `${device} — ${loc || 'Unknown Location'}`;
+                        } else {
+                            label = `${item.city || 'Unknown'}, ${item.country || 'Unknown'}`;
+                        }
+                        acc[label] = (acc[label] || 0) + 1;
+                        return acc;
+                    }, {});
+                    return Object.entries(statsMap).map(([path, count]) => ({ path, count })).sort((a,b) => b.count - a.count);
+                };
+
+                setAnalytics({ total: visits?.length || 0, pathStats: processStats(visits, true) });
+                setInteractionStats({
+                    likes: processStats(likes),
+                    comments: processStats(comments)
+                });
+            };
 
             const lockedLocationIds = useMemo(() => {
                 const ids = new Set();
-                savedRoutes.forEach(route => {
-                    route.waypoints.forEach(wp => ids.add(wp.id));
-                });
+                savedRoutes.forEach(route => { route.waypoints.forEach(wp => ids.add(wp.id)); });
                 return ids;
             }, [savedRoutes]);
 
@@ -266,8 +322,6 @@ useEffect(() => {
                 const { data } = await supabaseClient.from('saved_travel_routes').select('*').order('created_at', { ascending: false });
                 setSavedRoutes(data || []);
             };
-
-
 
             const smartChoiceIds = useMemo(() => {
                 return [...places].filter(p => p.status === 'pending').sort((a, b) => parseFloat(a.distance_km) - parseFloat(b.distance_km)).slice(0, 3).map(p => p.id);
@@ -301,70 +355,58 @@ useEffect(() => {
                 });
             };
             
+            const handleManualArticle = async (record) => {
+                const existingArticle = record.ai_article || "";
+                const newArticle = prompt(`Draft article for ${record.place_name}:`, existingArticle);
+                
+                if (newArticle === null) return;
 
-const handleManualArticle = async (record) => {
-    const existingArticle = record.ai_article || "";
-    const newArticle = prompt(`Draft article for ${record.place_name}:`, existingArticle);
-    
-    
-    if (newArticle === null) return;
+                const { error } = await supabaseClient.from('travel_bucket_list').update({ ai_article: newArticle }).eq('id', record.id);
 
-    const { error } = await supabaseClient
-        .from('travel_bucket_list')
-        .update({ ai_article: newArticle })
-        .eq('id', record.id);
-
-    if (!error) {
-        fetchPlaces();
-        triggerToast("Article saved successfully!");
-        return true;
-    } else {
-        console.error("Supabase Update Error:", error);
-        triggerToast("Error saving article");
-        return false;
-    }
-};
-
+                if (!error) {
+                    fetchPlaces();
+                    triggerToast("Article saved successfully!");
+                } else {
+                    triggerToast("Error saving article");
+                }
+            };
 
             const triggerToast = (msg) => {
-                setToastMsg(msg);
-                setShowToast(true);
+                setToastMsg(msg); setShowToast(true);
                 setTimeout(() => setShowToast(false), 3000);
             };
 
-const handleAddLocation = async () => {
-    if (!tempLocation) return alert("Select a location first");
-    
-    const isDuplicate = places.some(p => p.place_name.toLowerCase() === tempLocation.name.toLowerCase());
-    if (isDuplicate) return alert("This location is already in your bucket list!");
+            const handleAddLocation = async () => {
+                if (!tempLocation) return alert("Select a location first");
+                
+                const isDuplicate = places.some(p => p.place_name.toLowerCase() === tempLocation.name.toLowerCase());
+                if (isDuplicate) return alert("This location is already in your bucket list!");
 
-    // Calculate distance from base (Ekala)
-    const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(tempLocation.lat, tempLocation.lng)) / 1000).toFixed(1);
-    
-    // FIX: Use 'const' with '=' and correct '${}' template literal syntax
-    const google_maps_url = `https://www.google.com/maps/search/?api=1&query=${tempLocation.lat},${tempLocation.lng}`;
+                const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(tempLocation.lat, tempLocation.lng)) / 1000).toFixed(1);
+                
+                // Fixed Template Literal syntax for Google Maps URL
+                const google_maps_url = `https://www.google.com/maps/search/?api=1&query=${tempLocation.lat},${tempLocation.lng}`;
 
-    const { error } = await supabaseClient.from('travel_bucket_list').insert([{
-        place_name: tempLocation.name, 
-        latitude: parseFloat(tempLocation.lat), 
-        longitude: parseFloat(tempLocation.lng),
-        category: newLocationCategory, 
-        distance_km: parseFloat(dist), 
-        status: "pending", 
-        locality: tempLocation.area,
-        google_maps_url: google_maps_url 
-    }]);
+                const { error } = await supabaseClient.from('travel_bucket_list').insert([{
+                    place_name: tempLocation.name, 
+                    latitude: parseFloat(tempLocation.lat), 
+                    longitude: parseFloat(tempLocation.lng),
+                    category: newLocationCategory, 
+                    distance_km: parseFloat(dist), 
+                    status: "pending", 
+                    locality: tempLocation.area,
+                    google_maps_url: google_maps_url 
+                }]);
 
-    if (!error) { 
-        fetchPlaces(); 
-        setTempLocation(null); 
-        if (autocompleteRef.current) autocompleteRef.current.value = ""; 
-        triggerToast('Location Added'); 
-    } else {
-        console.error("Supabase Insert Error:", error);
-        alert("Failed to add location. Check console for details.");
-    }
-};
+                if (!error) { 
+                    fetchPlaces(); 
+                    setTempLocation(null); 
+                    if (autocompleteRef.current) autocompleteRef.current.value = ""; 
+                    triggerToast('Location Added'); 
+                } else {
+                    alert("Failed to add location. Check console for details.");
+                }
+            };
 
             const handleSaveRoute = async () => {
                 if (selectedTrip.length <= 1) return alert("Select at least 2 locations to save a route.");
@@ -377,196 +419,101 @@ const handleAddLocation = async () => {
                 if (!error) { fetchSavedRoutes(); triggerToast('Route Saved'); }
             };
             
-const repairDatabaseRecords = async () => {
-    triggerToast("Starting Database Audit...");
-    const service = new google.maps.places.PlacesService(document.createElement('div'));
+            const repairDatabaseRecords = async () => {
+                triggerToast("Starting Database Audit...");
+                const service = new google.maps.places.PlacesService(document.createElement('div'));
 
-    const findPlace = (query) => new Promise((resolve) => {
-        const request = { query: query, fields: ['name', 'geometry'] };
-        service.findPlaceFromQuery(request, (results, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && results) resolve(results[0]);
-            else resolve(null);
-        });
-    });
+                const findPlace = (query) => new Promise((resolve) => {
+                    const request = { query: query, fields: ['name', 'geometry'] };
+                    service.findPlaceFromQuery(request, (results, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK && results) resolve(results[0]);
+                        else resolve(null);
+                    });
+                });
 
-    const { data: allPlaces, error } = await supabaseClient.from('travel_bucket_list').select('*');
-    if (error) return;
+                const { data: allPlaces, error } = await supabaseClient.from('travel_bucket_list').select('*');
+                if (error) return;
 
-    for (const place of allPlaces) {
-        if (!place.google_maps_url || !place.latitude) {
-            const result = await findPlace(place.place_name);
-            if (result && result.geometry) {
-                const lat = result.geometry.location.lat();
-                const lng = result.geometry.location.lng();
-                const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(lat, lng)) / 1000).toFixed(1);
+                for (const place of allPlaces) {
+                    if (!place.google_maps_url || !place.latitude) {
+                        const result = await findPlace(place.place_name);
+                        if (result && result.geometry) {
+                            const lat = result.geometry.location.lat();
+                            const lng = result.geometry.location.lng();
+                            const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(lat, lng)) / 1000).toFixed(1);
+                            
+                            // Fixed Template Literal syntax
+                            await supabaseClient.from('travel_bucket_list').update({
+                                latitude: lat,
+                                longitude: lng,
+                                distance_km: parseFloat(dist),
+                                google_maps_url: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+                            }).eq('id', place.id);
+                        }
+                    }
+                }
+                fetchPlaces();
+                triggerToast("Audit Complete");
+            };
+
+            const handleStartRoute = () => {
+                if (selectedTrip.length === 0) return;
+                const origin = `${EKALA.lat},${EKALA.lng}`;
+                const destination = `${selectedTrip[selectedTrip.length - 1].latitude},${selectedTrip[selectedTrip.length - 1].longitude}`;
+                const waypoints = selectedTrip.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
                 
-                // FIXED: Corrected Template Literal Syntax
-                await supabaseClient.from('travel_bucket_list').update({
-                    latitude: lat,
-                    longitude: lng,
-                    distance_km: parseFloat(dist),
-                    google_maps_url: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-                }).eq('id', place.id);
-            }
-        }
-    }
-    fetchPlaces();
-    triggerToast("Audit Complete");
-};
+                // Fixed Direction URL
+                window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`, '_blank');
+            };
 
-  const handleStartRoute = () => {
-    if (selectedTrip.length === 0) return;
-    const origin = `${EKALA.lat},${EKALA.lng}`;
-    const destination = `${selectedTrip[selectedTrip.length - 1].latitude},${selectedTrip[selectedTrip.length - 1].longitude}`;
-    const waypoints = selectedTrip.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
-    
-    // FIXED: Standard Google Maps Direction URL
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`, '_blank');
-};
+            const handleShareRoute = (route) => {
+                const origin = `${EKALA.lat},${EKALA.lng}`;
+                const destination = `${route.waypoints[route.waypoints.length - 1].latitude},${route.waypoints[route.waypoints.length - 1].longitude}`;
+                const waypoints = route.waypoints.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
+                
+                // Fixed Direction URL
+                const mapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+                const totalDist = route.waypoints.reduce((acc, curr) => acc + curr.distance_km, 0).toFixed(1);
+                const locationList = route.waypoints.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n');
 
-const handleShareRoute = (route) => {
-    const origin = `${EKALA.lat},${EKALA.lng}`;
-    const destination = `${route.waypoints[route.waypoints.length - 1].latitude},${route.waypoints[route.waypoints.length - 1].longitude}`;
-    const waypoints = route.waypoints.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
-    
-    const mapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
-    const totalDist = route.waypoints.reduce((acc, curr) => acc + curr.distance_km, 0).toFixed(1);
-    const locationList = route.waypoints.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n');
+                const shareText = `📍 *${route.route_name}*\n\nTotal Distance: ${totalDist} KM\n\n*Stops:*\n${locationList}\n\n*View Journey Map:*\n${mapUrl}`;
 
-    const shareText = `📍 *${route.route_name}*\n\nTotal Distance: ${totalDist} KM\n\n*Stops:*\n${locationList}\n\n*View Journey Map:*\n${mapUrl}`;
-
-    if (navigator.share) {
-        navigator.share({ title: route.route_name, text: shareText }).catch(console.error);
-    } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
-    }
-};
+                if (navigator.share) {
+                    navigator.share({ title: route.route_name, text: shareText }).catch(console.error);
+                } else {
+                    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
+                }
+            };
 
             const updateField = async (id, field, value) => {
-    // 1. Perform the primary update (e.g., changing status to 'done')
-    const { error } = await supabaseClient.from('travel_bucket_list').update({ [field]: value }).eq('id', id);
-    
-    if (!error) {
-        // 2. Logic to unlock if status is changed to 'done'
-        if (field === 'status' && value === 'done') {
-            // Find any routes containing this location
-            const routesToCleanup = savedRoutes.filter(route => 
-                route.waypoints.some(wp => wp.id === id)
-            );
-
-            for (const route of routesToCleanup) {
-                const updatedWaypoints = route.waypoints.filter(wp => wp.id !== id);
+                const { error } = await supabaseClient.from('travel_bucket_list').update({ [field]: value }).eq('id', id);
                 
-                if (updatedWaypoints.length < 2) {
-                    // Delete route if it has fewer than 2 stops left
-                    await supabaseClient.from('saved_travel_routes').delete().eq('id', route.id);
-                } else {
-                    // Update route with remaining stops
-                    await supabaseClient.from('saved_travel_routes').update({ waypoints: updatedWaypoints }).eq('id', route.id);
+                if (!error) {
+                    if (field === 'status' && value === 'done') {
+                        const routesToCleanup = savedRoutes.filter(route => route.waypoints.some(wp => wp.id === id));
+                        for (const route of routesToCleanup) {
+                            const updatedWaypoints = route.waypoints.filter(wp => wp.id !== id);
+                            if (updatedWaypoints.length < 2) {
+                                await supabaseClient.from('saved_travel_routes').delete().eq('id', route.id);
+                            } else {
+                                await supabaseClient.from('saved_travel_routes').update({ waypoints: updatedWaypoints }).eq('id', route.id);
+                            }
+                        }
+                        fetchSavedRoutes();
+                    }
+                    fetchPlaces(); 
+                    triggerToast(value === 'done' ? 'Visited & Unlocked' : 'Updated'); 
                 }
-            }
-            // Refresh routes to reflect the "unlocking" in the UI
-            fetchSavedRoutes();
-        }
-        
-        fetchPlaces(); 
-        triggerToast(value === 'done' ? 'Visited & Unlocked' : 'Updated'); 
-    }
-};
+            };
 
-const handleEditName = async (record) => {
-    const newName = prompt(`Edit name for ${record.place_name}:`, record.place_name);
-    if (!newName || newName === record.place_name) return;
+            const handleEditName = async (record) => {
+                const newName = prompt(`Edit name for ${record.place_name}:`, record.place_name);
+                if (!newName || newName === record.place_name) return;
 
-    const { error } = await supabaseClient
-        .from('travel_bucket_list')
-        .update({ place_name: newName })
-        .eq('id', record.id);
-
-    if (!error) {
-        fetchPlaces();
-        triggerToast("Name updated!");
-    } else {
-        triggerToast("Error updating name");
-    }
-};
-
-const logVisit = async () => {
-    if (sessionStorage.getItem('visit_logged')) return;
-
-    try {
-        // Fetch geographic data via IP
-        const geoRes = await fetch('https://ipapi.co/json/');
-        const geo = await geoRes.json();
-
-        const { error } = await supabaseClient
-            .from('page_visits')
-            .insert([{
-                page_path: window.location.pathname,
-                user_agent: navigator.userAgent,
-                country: geo.country_name || 'Unknown',
-                region: geo.region || 'Unknown',
-                city: geo.city || 'Unknown',
-                ip_address: geo.ip || 'Unknown'
-            }]);
-        
-        if (!error) {
-            sessionStorage.setItem('visit_logged', 'true');
-        }
-    } catch (err) {
-        // Fallback to basic logging if geolocation API is blocked
-        await supabaseClient.from('page_visits').insert([{
-            page_path: window.location.pathname,
-            user_agent: navigator.userAgent
-        }]);
-    }
-};
-
-
-
-
-const fetchAnalytics = async () => {
-    const { data, error } = await supabaseClient
-        .from('page_visits')
-        .select('user_agent, country, region, city');
-
-    if (error) return console.error("Analytics Error:", error);
-
-    if (data) {
-        const statsMap = data.reduce((acc, visit) => {
-            const ua = visit.user_agent;
-            let deviceLabel = "Unknown Device";
-
-            // Device Identification Logic based on Sample Dataset
-            if (/iPhone/i.test(ua)) {
-                deviceLabel = "iPhone";
-            } else if (/Android/i.test(ua)) {
-                deviceLabel = "Android";
-            } else if (/Ubuntu/i.test(ua)) {
-                deviceLabel = "Ubuntu PC";
-            } else if (/Windows/i.test(ua)) {
-                deviceLabel = "Windows PC";
-            } else if (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua)) {
-                deviceLabel = "MAC";
-            }
-
-            // Construct the requested format: [Device — City, Country, Region]
-            const locationParts = [visit.city, visit.region, visit.country].filter(Boolean);
-            const locationString = locationParts.length > 0 ? locationParts.join(', ') : "Unknown Location";
-            
-            const combinedLabel = `${deviceLabel} — ${locationString}`;
-            
-            acc[combinedLabel] = (acc[combinedLabel] || 0) + 1;
-            return acc;
-        }, {});
-
-        const pathStats = Object.entries(statsMap)
-            .map(([path, count]) => ({ path, count }))
-            .sort((a, b) => b.count - a.count);
-
-        setAnalytics({ total: data.length, pathStats });
-    }
-};
+                const { error } = await supabaseClient.from('travel_bucket_list').update({ place_name: newName }).eq('id', record.id);
+                if (!error) { fetchPlaces(); triggerToast("Name updated!"); } 
+                else { triggerToast("Error updating name"); }
+            };
 
             const updateMapElements = () => {
                 if (!mapRef.current) return;
@@ -614,36 +561,35 @@ const fetchAnalytics = async () => {
 
             return (
                 <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
-    <header className="h-20 flex items-center justify-between px-4 md:px-6 bg-white border-b shrink-0 z-[1001]">
-        <div className="flex items-center gap-4">
-            {/* Decorative Icon & Title Container */}
-            <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-lg shadow-slate-200 border border-slate-700/50 transform rotate-3 hover:rotate-0 transition-transform duration-300">
-                    <i data-lucide="map" className="w-5 h-5 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]"></i>
-                </div>
-                <h1 className="text-xl md:text-2xl font-black italic uppercase text-slate-900 tracking-tighter shrink-0">
-                    My Journal
-                </h1>
-            </div>
-            
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border">
-                <div className="w-12 md:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${progress}%`}}></div>
-                </div>
-                <span className="text-[10px] font-black text-slate-500">{progress}%</span>
-            </div>
-        </div>
-        {selectedTrip.length > 0 && (
-            <div className="flex items-center gap-1 md:gap-2">
-                <span className="hidden sm:inline text-xs font-black text-blue-600">{(selectedTrip.reduce((a,b)=>a+b.distance_km,0)).toFixed(1)}KM</span>
-                {!editingRouteId && (
-                    <button onClick={handleSaveRoute} className="bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">Save</button>
-                )}
-                <button onClick={()=>{setSelectedTrip([]); setEditingRouteId(null);}} className="text-[10px] font-black uppercase text-red-500 border border-red-100 px-3 py-2 rounded-xl">Clear</button>
-                <button onClick={handleStartRoute} className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">Start</button>
-            </div>                                                    
-        )}
-    </header>
+                    <header className="h-20 flex items-center justify-between px-4 md:px-6 bg-white border-b shrink-0 z-[1001]">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-lg shadow-slate-200 border border-slate-700/50 transform rotate-3 hover:rotate-0 transition-transform duration-300">
+                                    <i data-lucide="map" className="w-5 h-5 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]"></i>
+                                </div>
+                                <h1 className="text-xl md:text-2xl font-black italic uppercase text-slate-900 tracking-tighter shrink-0">
+                                    My Journal
+                                </h1>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border">
+                                <div className="w-12 md:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${progress}%`}}></div>
+                                </div>
+                                <span className="text-[10px] font-black text-slate-500">{progress}%</span>
+                            </div>
+                        </div>
+                        {selectedTrip.length > 0 && (
+                            <div className="flex items-center gap-1 md:gap-2">
+                                <span className="hidden sm:inline text-xs font-black text-blue-600">{(selectedTrip.reduce((a,b)=>a+b.distance_km,0)).toFixed(1)}KM</span>
+                                {!editingRouteId && (
+                                    <button onClick={handleSaveRoute} className="bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">Save</button>
+                                )}
+                                <button onClick={()=>{setSelectedTrip([]); setEditingRouteId(null);}} className="text-[10px] font-black uppercase text-red-500 border border-red-100 px-3 py-2 rounded-xl">Clear</button>
+                                <button onClick={handleStartRoute} className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">Start</button>
+                            </div>                                                    
+                        )}
+                    </header>
 
                     <div className="lg:hidden flex border-b bg-white">
                         <button onClick={()=>setActiveTab('map')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='map'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Map & Add</button>
@@ -675,236 +621,248 @@ const fetchAnalytics = async () => {
                             </div>
 
                             <div className="bg-white rounded-[1.5rem] border p-4 shrink-0 shadow-sm mb-4 lg:mb-0">
-    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">My Saved Plan History</label>
-    <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-list">
-        {savedRoutes.map(r => (
-            <div key={r.id} className="group flex items-center gap-2">
-                <div onClick={()=>{setSelectedTrip(r.waypoints); setEditingRouteId(r.id); setActiveTab('list');}} 
-                     className={`flex-1 p-2.5 rounded-xl border cursor-pointer text-[10px] font-black uppercase transition-all ${editingRouteId===r.id ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm':'bg-slate-50 hover:bg-slate-100'}`}>
-                    {r.route_name}
-                </div>
-                
-                {/* Add Share Button */}
-                <button onClick={() => handleShareRoute(r)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100">
-                    <i data-lucide="share-2" className="w-4 h-4"></i>
-                </button>
-
-                <button onClick={()=>confirm("Delete plan?") && supabaseClient.from('saved_travel_routes').delete().eq('id', r.id).then(fetchSavedRoutes)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
-                    <i data-lucide="trash-2" className="w-4 h-4"></i>
-                </button>
-            </div>
-        ))}
-    </div>
-</div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">My Saved Plan History</label>
+                                <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-list">
+                                    {savedRoutes.map(r => (
+                                        <div key={r.id} className="group flex items-center gap-2">
+                                            <div onClick={()=>{setSelectedTrip(r.waypoints); setEditingRouteId(r.id); setActiveTab('list');}} 
+                                                 className={`flex-1 p-2.5 rounded-xl border cursor-pointer text-[10px] font-black uppercase transition-all ${editingRouteId===r.id ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm':'bg-slate-50 hover:bg-slate-100'}`}>
+                                                {r.route_name}
+                                            </div>
+                                            <button onClick={() => handleShareRoute(r)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100">
+                                                <i data-lucide="share-2" className="w-4 h-4"></i>
+                                            </button>
+                                            <button onClick={()=>confirm("Delete plan?") && supabaseClient.from('saved_travel_routes').delete().eq('id', r.id).then(fetchSavedRoutes)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                                                <i data-lucide="trash-2" className="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
                         <div className={`scroll-column ${activeTab !== 'list' ? 'mobile-hidden' : 'mobile-list-view'}`}>
-                        
-{/* Analytics Dashboard Section */}
-<div className="bg-slate-900 rounded-[1.5rem] p-5 mb-4 text-white shadow-xl">
-    <div className="flex justify-between items-center mb-4">
-        <div>
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Platform Insights</h2>
-            <p className="text-2xl font-black">{analytics.total} <span className="text-xs text-slate-500 font-bold uppercase">Total Views</span></p>
-        </div>
-        <button onClick={fetchAnalytics} className="p-2 bg-slate-800 rounded-xl hover:bg-slate-700 transition-colors">
-            <i data-lucide="refresh-cw" className="w-4 h-4 text-blue-400"></i>
-        </button>
-    </div>
+                            
+                            {/* Consolidated Analytics Dashboard */}
+                            <div className="bg-slate-900 rounded-[1.5rem] p-5 mb-4 text-white shadow-xl">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Back-End Audit</h2>
+                                        <p className="text-2xl font-black">
+                                            {analytics?.total || 0} 
+                                            <span className="text-xs text-slate-500 font-bold uppercase ml-2">Total Views</span>
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={fetchAllAnalytics} 
+                                        className="p-2 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all active:scale-95"
+                                    >
+                                        <i data-lucide="refresh-cw" className="w-4 h-4 text-blue-400"></i>
+                                    </button>
+                                </div>
 
-    {/* Scrollable Container for Device List */}
-    <div className="space-y-4 max-h-[180px] overflow-y-auto pr-2 scrollable-list">
-        {analytics.pathStats.map((stat, idx) => (
-            <div key={idx} className="space-y-1.5">
-                <div className="flex justify-between text-[9px] font-black uppercase">
-                    <span className="truncate flex-1 pr-2">{stat.path}</span>
-                    <span className="text-slate-400">{stat.count} Hits</span>
-                </div>
-                {/* Visual Bar Chart */}
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div 
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" 
-                        style={{ width: `${(stat.count / analytics.total) * 100}%` }}
-                    ></div>
-                </div>
-            </div>
-        ))}
-    </div>
-</div>
-                        
+                                {/* Section 1: Traffic Sources */}
+                                <div className="mb-6">
+                                    <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest block mb-3">Traffic Source & Devices</label>
+                                    <div className="space-y-4 max-h-[160px] overflow-y-auto pr-2 scrollable-list">
+                                        {(analytics?.pathStats || []).map((stat) => {
+                                            const percentage = analytics.total > 0 ? (stat.count / analytics.total) * 100 : 0;
+                                            return (
+                                                <div key={stat.path} className="space-y-1.5">
+                                                    <div className="flex justify-between text-[9px] font-black uppercase">
+                                                        <span className="truncate flex-1 pr-2 text-slate-300">{stat.path}</span>
+                                                        <span className="text-slate-400 font-mono">{stat.count} Hits</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700 ease-out" 
+                                                            style={{ width: `${percentage}%` }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Engagement Geo-Analytics */}
+                                <div className="grid grid-cols-2 gap-4 pt-5 border-t border-slate-800/50">
+                                    {/* Likes */}
+                                    <div>
+                                        <label className="text-[8px] font-black text-pink-500 uppercase tracking-widest block mb-2 flex items-center gap-1">
+                                            <i data-lucide="heart" className="w-2.5 h-2.5"></i> Likes
+                                        </label>
+                                        <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1 scrollable-list">
+                                            {(interactionStats?.likes || []).length > 0 ? (
+                                                interactionStats.likes.map((stat, i) => (
+                                                    <div key={i} className="flex justify-between text-[8px] font-bold uppercase border-b border-slate-800/30 pb-1">
+                                                        <span className="text-slate-400 truncate pr-1">{stat.path}</span>
+                                                        <span className="text-pink-400">{stat.count}</span>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <span className="text-[7px] text-slate-600 italic">No likes recorded</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Comments */}
+                                    <div>
+                                        <label className="text-[8px] font-black text-indigo-400 uppercase tracking-widest block mb-2 flex items-center gap-1">
+                                            <i data-lucide="message-circle" className="w-2.5 h-2.5"></i> Comments
+                                        </label>
+                                        <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1 scrollable-list">
+                                            {(interactionStats?.comments || []).length > 0 ? (
+                                                interactionStats.comments.map((stat, i) => (
+                                                    <div key={i} className="flex justify-between text-[8px] font-bold uppercase border-b border-slate-800/30 pb-1">
+                                                        <span className="text-slate-400 truncate pr-1">{stat.path}</span>
+                                                        <span className="text-indigo-400">{stat.count}</span>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <span className="text-[7px] text-slate-600 italic">No comments yet</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                 
                             <div className="sticky top-0 z-[100] bg-white/95 backdrop-blur rounded-[1.5rem] border p-4 space-y-3 shadow-sm mb-4">
                                 <div className="flex items-center justify-between">
                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter Bucket List</label>
-                                    
-                           <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                                    
-                           <button onClick={()=>setSortBy('newest')} className={`px-2 py-1 text-[8px] font-black rounded uppercase ${sortBy==='newest'?'bg-white shadow-sm':'text-slate-400'}`}>New</button>
-                           <button onClick={()=>setSortBy('nearest')} className={`px-2 py-1 text-[8px] font-black rounded uppercase ${sortBy==='nearest'?'bg-white shadow-sm':'text-slate-400'}`}>Near</button>
-                          </div>
-                                    
-                        </div>
+                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                                        <button onClick={()=>setSortBy('newest')} className={`px-2 py-1 text-[8px] font-black rounded uppercase ${sortBy==='newest'?'bg-white shadow-sm':'text-slate-400'}`}>New</button>
+                                        <button onClick={()=>setSortBy('nearest')} className={`px-2 py-1 text-[8px] font-black rounded uppercase ${sortBy==='nearest'?'bg-white shadow-sm':'text-slate-400'}`}>Near</button>
+                                    </div>
+                                </div>
                                 
                                 <div className="flex flex-wrap gap-2">
                                     <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="flex-1 p-2 rounded-xl bg-slate-50 text-[10px] font-black border uppercase min-w-[120px]" />
                                     <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="p-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase"><option value="Pending">Pending</option><option value="Completed">Visited</option><option value="All">All</option></select>
                                     <select value={filterTag} onChange={e=>setFilterTag(e.target.value)} className="p-2 rounded-xl bg-slate-50 text-[10px] font-black uppercase border"><option value="All">All Tags</option>{VALID_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
                                     
-                                    <button onClick={repairDatabaseRecords} 
-        className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2"><i data-lucide="shield-check" className="w-3.5 h-3.5"></i>Repair Database Metadata
-        </button>
-    
-                          </div>
-                        </div>
+                                    <button onClick={repairDatabaseRecords} className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
+                                        <i data-lucide="shield-check" className="w-3.5 h-3.5"></i>Repair Database Metadata
+                                    </button>
+                                </div>
+                            </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-24">
-                            
                                 {filteredPlaces.map(p => {
-    const isSelected = selectedTrip.find(st => st.id === p.id);
-    const isSmart = smartChoiceIds.includes(p.id) && p.status === 'pending';
-    const parentPlan = savedRoutes.find(r => r.waypoints.some(w => w.id === p.id));
-    const isLocked = lockedLocationIds.has(p.id);
+                                    const isSelected = selectedTrip.find(st => st.id === p.id);
+                                    const isSmart = smartChoiceIds.includes(p.id) && p.status === 'pending';
+                                    const parentPlan = savedRoutes.find(r => r.waypoints.some(w => w.id === p.id));
+                                    const isLocked = lockedLocationIds.has(p.id);
+                                    const isJournaled = p.cover_photo_url || p.photo_album_url;
 
-    // Audit Rule: Tray is hidden if cover image OR album exists
-    const isJournaled = p.cover_photo_url || p.photo_album_url;
+                                    return (
+                                        <div key={p.id} 
+                                                onMouseEnter={() => setHoveredPlaceId(p.id)} 
+                                                onMouseLeave={() => setHoveredPlaceId(null)} 
+                                                onClick={() => {
+                                                    if (isLocked) return; 
+                                                    isSelected ? setSelectedTrip(selectedTrip.filter(s => s.id !== p.id)) : setSelectedTrip([...selectedTrip, p]);
+                                                }} 
+                                                className={`location-card rounded-[1.5rem] bg-white border-2 flex flex-col transition-all cursor-pointer relative shadow-sm
+                                                ${isSelected ? 'border-red-500 bg-red-50' : isSmart ? 'border-blue-200 shadow-md' : 'border-slate-100 hover:border-slate-300'}
+                                                ${isLocked ? 'grayscale-[0.1] cursor-not-allowed border-slate-200' : ''}`}>
+                                            
+                                            {isLocked && (
+                                                <div className="absolute inset-0 bottom-20 z-20 flex items-center justify-center bg-white/10 rounded-t-[1.3rem] backdrop-blur-[1px]">
+                                                    <div className="bg-slate-900/80 text-white p-2.5 rounded-full shadow-lg">
+                                                        <i data-lucide="lock" className="w-4 h-4"></i>
+                                                    </div>
+                                                </div>
+                                            )}
 
-    return (
-        <div key={p.id} 
-                onMouseEnter={() => setHoveredPlaceId(p.id)} 
-                onMouseLeave={() => setHoveredPlaceId(null)} 
-                onClick={() => {
-                    if (isLocked) return; 
-                    isSelected ? setSelectedTrip(selectedTrip.filter(s => s.id !== p.id)) : setSelectedTrip([...selectedTrip, p]);
-                }} 
-                className={`location-card rounded-[1.5rem] bg-white border-2 flex flex-col transition-all cursor-pointer relative shadow-sm
-                ${isSelected ? 'border-red-500 bg-red-50' : isSmart ? 'border-blue-200 shadow-md' : 'border-slate-100 hover:border-slate-300'}
-                ${isLocked ? 'grayscale-[0.1] cursor-not-allowed border-slate-200' : ''}`}>
-            
-            {/* Locked Overlay - Adjusted bottom-20 to keep the Action Tray clickable */}
-            {isLocked && (
-                <div className="absolute inset-0 bottom-20 z-20 flex items-center justify-center bg-white/10 rounded-t-[1.3rem] backdrop-blur-[1px]">
-                    <div className="bg-slate-900/80 text-white p-2.5 rounded-full shadow-lg">
-                        <i data-lucide="lock" className="w-4 h-4"></i>
-                    </div>
-                </div>
-            )}
+                                            <div className="h-32 bg-slate-100 relative overflow-hidden rounded-t-[1.3rem] shrink-0">
+                                                {p.cover_photo_url ? (
+                                                    <img src={p.cover_photo_url} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                        <i data-lucide="image"></i>
+                                                    </div>
+                                                )}
+                                                <div className="absolute top-2 left-2 flex flex-col gap-1 z-[30]">
+                                                    <select 
+                                                        value={p.category} 
+                                                        onChange={(e) => updateField(p.id, 'category', e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()} 
+                                                        className="bg-white/95 px-2 py-1 rounded-lg text-[8px] font-black uppercase w-fit border-none cursor-pointer shadow-sm outline-none text-slate-900"
+                                                    >
+                                                        {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                    </select>
+                                                    {parentPlan && (
+                                                        <div className="bg-amber-400 text-black px-2 py-1.5 rounded-lg text-[8px] font-black uppercase flex items-center gap-1.5 shadow-md border border-amber-500/20">
+                                                            <i data-lucide="milestone" className="w-3 h-3"></i>
+                                                            <span>{parentPlan.route_name}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
 
-            {/* Photo Section */}
-            <div className="h-32 bg-slate-100 relative overflow-hidden rounded-t-[1.3rem] shrink-0">
-                {p.cover_photo_url ? (
-                    <img src={p.cover_photo_url} className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300">
-                        <i data-lucide="image"></i>
-                    </div>
-                )}
-                <div className="absolute top-2 left-2 flex flex-col gap-1 z-[30]">
-                    <select 
-                        value={p.category} 
-                        onChange={(e) => updateField(p.id, 'category', e.target.value)}
-                        onClick={(e) => e.stopPropagation()} 
-                        className="bg-white/95 px-2 py-1 rounded-lg text-[8px] font-black uppercase w-fit border-none cursor-pointer shadow-sm outline-none text-slate-900"
-                    >
-                        {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                    {parentPlan && (
-                        <div className="bg-amber-400 text-black px-2 py-1.5 rounded-lg text-[8px] font-black uppercase flex items-center gap-1.5 shadow-md border border-amber-500/20">
-                            <i data-lucide="milestone" className="w-3 h-3"></i>
-                            <span>{parentPlan.route_name}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+                                            <div className="p-4 flex-1 flex flex-col min-h-0">
+                                                <div className="flex justify-between items-start gap-2 mb-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 onClick={(e) => { e.stopPropagation(); handleEditName(p); }} className="font-extrabold text-slate-800 text-[11px] uppercase truncate leading-tight hover:text-blue-600 cursor-edit" title="Click to edit name">
+                                                            {p.place_name}
+                                                        </h3>
+                                                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">{p.locality || 'Unknown Area'}</p>
+                                                    </div>
+                                                    <span className="text-[9px] font-black text-slate-400 italic shrink-0">{p.distance_km} KM</span>
+                                                </div>
 
-            {/* Info & Actions */}
-            <div className="p-4 flex-1 flex flex-col min-h-0">
-                <div className="flex justify-between items-start gap-2 mb-3">
-                    <div className="flex-1 min-w-0">
-                        <h3 
-    onClick={(e) => { e.stopPropagation(); handleEditName(p); }}
-    className="font-extrabold text-slate-800 text-[11px] uppercase truncate leading-tight hover:text-blue-600 cursor-edit"
-    title="Click to edit name"
->
-    {p.place_name}
-</h3>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">{p.locality || 'Unknown Area'}</p>
-                    </div>
-                    <span className="text-[9px] font-black text-slate-400 italic shrink-0">{p.distance_km} KM</span>
-                </div>
+                                                <div className="flex flex-col gap-3 pt-3 border-t border-slate-100 mt-auto" onClick={e => e.stopPropagation()}>
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <button title="Cover Image" onClick={() => updateField(p.id, 'cover_photo_url', prompt("Image URL:", p.cover_photo_url))} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.cover_photo_url ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:bg-slate-50'}`}>
+                                                            <i data-lucide="camera" className="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                        
+                                                        <button title="Album URL" onClick={() => updateField(p.id, 'photo_album_url', prompt("Album Link:", p.photo_album_url))} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.photo_album_url ? 'text-blue-500 bg-blue-50' : 'text-slate-300 hover:text-blue-500'}`}>
+                                                            <i data-lucide="folder-plus" className="w-3.5 h-3.5"></i>
+                                                        </button>
 
-                {/* TWO-LINE ACTION BAR */}
-                <div className="flex flex-col gap-3 pt-3 border-t border-slate-100 mt-auto" onClick={e => e.stopPropagation()}>
-                    
-                    {/* Line 1: Media Icons */}
-                    <div className="flex items-center justify-between px-1">
-                        <button title="Cover Image" onClick={() => updateField(p.id, 'cover_photo_url', prompt("Image URL:", p.cover_photo_url))} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.cover_photo_url ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:bg-slate-50'}`}>
-                            <i data-lucide="camera" className="w-3.5 h-3.5"></i>
-                        </button>
-                        
-                        <button title="Album URL" onClick={() => updateField(p.id, 'photo_album_url', prompt("Album Link:", p.photo_album_url))} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.photo_album_url ? 'text-blue-500 bg-blue-50' : 'text-slate-300 hover:text-blue-500'}`}>
-                            <i data-lucide="folder-plus" className="w-3.5 h-3.5"></i>
-                        </button>
+                                                        {p.photo_album_url && (
+                                                            <button title="View Album" onClick={() => window.open(p.photo_album_url)} className="w-8 h-8 flex items-center justify-center text-indigo-500 bg-indigo-50 rounded-xl transition-all">
+                                                                <i data-lucide="external-link" className="w-3.5 h-3.5"></i>
+                                                            </button>
+                                                        )}
 
-                        {p.photo_album_url && (
-                            <button title="View Album" onClick={() => window.open(p.photo_album_url)} className="w-8 h-8 flex items-center justify-center text-indigo-500 bg-indigo-50 rounded-xl transition-all">
-                                <i data-lucide="external-link" className="w-3.5 h-3.5"></i>
-                            </button>
-                        )}
+                                                        <button title="Article" onClick={() => handleManualArticle(p)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.ai_article ? 'text-amber-500 bg-amber-50 shadow-inner' : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'}`}>
+                                                            <i data-lucide={p.ai_article ? "sparkles" : "wand-2"} className="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                    </div>
 
-                        <button 
-                            title="Article" 
-                            onClick={() => handleManualArticle(p)}
-                            className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.ai_article ? 'text-amber-500 bg-amber-50 shadow-inner' : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'}`}
-                        >
-                            <i data-lucide={p.ai_article ? "sparkles" : "wand-2"} className="w-3.5 h-3.5"></i>
-                        </button>
-                    </div>
+                                                    {!isJournaled ? (
+                                                        <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-2xl">
+                                                            <button title="Map" onClick={() => { window.open(p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`, '_blank'); }} className="flex-1 flex items-center justify-center gap-2 py-1.5 text-orange-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-orange-100">
+                                                                <i data-lucide="map-pin" className="w-3 h-3"></i>
+                                                                <span className="text-[8px] font-black uppercase tracking-tighter">Navigate</span>
+                                                            </button>
+                                                            
+                                                            <div className="w-px h-4 bg-slate-200 mx-1"></div>
 
-                    {/* Line 2: Navigation & Status Tray - HIDDEN IF JOURNALED */}
-                    {!isJournaled ? (
-                        <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-2xl">
-                            <button 
-                                title="Map" 
-                                onClick={() => {
-                                    const targetUrl = p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`;
-                                    window.open(targetUrl, '_blank');
-                                }} 
-                                className="flex-1 flex items-center justify-center gap-2 py-1.5 text-orange-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-orange-100"
-                            >
-                                <i data-lucide="map-pin" className="w-3 h-3"></i>
-                                <span className="text-[8px] font-black uppercase tracking-tighter">Navigate</span>
-                            </button>
-                            
-                            <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                                                            <button title="Mark" onClick={() => updateField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg transition-all ${p.status === 'done' ? 'text-emerald-600 bg-white shadow-sm' : 'text-slate-400 hover:text-emerald-500'}`}>
+                                                                <i data-lucide="check-circle" className="w-3 h-3"></i>
+                                                                <span className="text-[8px] font-black uppercase tracking-tighter">{p.status === 'done' ? 'Visited' : 'Pending'}</span>
+                                                            </button>
 
-                            <button 
-                                title="Mark" 
-                                onClick={() => updateField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} 
-                                className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg transition-all ${p.status === 'done' ? 'text-emerald-600 bg-white shadow-sm' : 'text-slate-400 hover:text-emerald-500'}`}
-                            >
-                                <i data-lucide="check-circle" className="w-3 h-3"></i>
-                                <span className="text-[8px] font-black uppercase tracking-tighter">{p.status === 'done' ? 'Visited' : 'Pending'}</span>
-                            </button>
+                                                            <div className="w-px h-4 bg-slate-200 mx-1"></div>
 
-                            <div className="w-px h-4 bg-slate-200 mx-1"></div>
-
-                            <button 
-                                title="Delete" 
-                                onClick={() => confirm("Remove location?") && supabaseClient.from('travel_bucket_list').delete().eq('id', p.id).then(fetchPlaces)} 
-                                className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 transition-all"
-                            >
-                                <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="h-[44px] flex items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest italic">Journal Entry Finalized</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-})}
+                                                            <button title="Delete" onClick={() => confirm("Remove location?") && supabaseClient.from('travel_bucket_list').delete().eq('id', p.id).then(fetchPlaces)} className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 transition-all">
+                                                                <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-[44px] flex items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                                                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest italic">Journal Entry Finalized</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </main>
