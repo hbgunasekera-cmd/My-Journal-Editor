@@ -515,69 +515,21 @@ const logVisit = async () => {
 
 
 const fetchAnalytics = async () => {
+    // Audit: Select country and region columns as well
     const { data, error } = await supabaseClient
         .from('page_visits')
-        .select('user_agent, created_at');
+        .select('user_agent, country, region, created_at');
 
     if (error) return console.error("Analytics Error:", error);
 
     if (data) {
-        // Mapping internal hardware IDs to friendly names
-        const modelMapping = {
-            'iPhone13,2': 'iPhone 12 Pro',
-            'iPhone9,1': 'iPhone 7',
-            'iPhone9,3': 'iPhone 7',
-            'SM-A546B': 'Samsung Galaxy A54', // Example Android mapping
-            'Pixel 7': 'Google Pixel 7'
-        };
-
         const statsMap = data.reduce((acc, visit) => {
-            const ua = visit.user_agent;
-            let deviceLabel = "Other Device";
-            let osDetails = "";
+            // Priority: Use Location string if available, otherwise fallback to User Agent
+            const locationLabel = visit.country 
+                ? `📍 ${visit.city || visit.region}, ${visit.country}`
+                : visit.user_agent.split(' ')[0]; // Fallback to short UA
 
-            // 1. Android Detection
-            if (/Android/i.test(ua)) {
-                // Extract Version
-                const verMatch = ua.match(/Android (\d+)/);
-                const version = verMatch ? ` (Android ${verMatch[1]})` : " (Android)";
-                
-                // Extract Model (Look for the string after 'Android 14; ')
-                // Standard UA format: "Linux; Android 14; SM-A546B"
-                const modelMatch = ua.match(/Android \d+; ([^;)]+)/);
-                const modelId = modelMatch ? modelMatch[1].trim() : "Android Device";
-                
-                deviceLabel = modelMapping[modelId] || modelId;
-                osDetails = version;
-            }
-            // 2. iOS Detection (Browser & In-App)
-            else if (/iPhone/i.test(ua)) {
-                const fbdvMatch = ua.match(/FBDV\/(iPhone[\d,]+)/);
-                const fbsvMatch = ua.match(/FBSV\/([\d.]+)/);
-
-                if (fbdvMatch) {
-                    deviceLabel = modelMapping[fbdvMatch[1]] || fbdvMatch[1];
-                    osDetails = fbsvMatch ? ` (iOS ${fbsvMatch[1]})` : "";
-                } else {
-                    deviceLabel = "iPhone";
-                    const osMatch = ua.match(/OS (\d+[_.]\d+)/);
-                    osDetails = osMatch ? ` (iOS ${osMatch[1].replace('_', '.')})` : "";
-                }
-            } 
-            // 3. Desktop Environments
-            else if (/Ubuntu/i.test(ua)) {
-                deviceLabel = "Ubuntu Desktop";
-                const rvMatch = ua.match(/rv:(\d+)/);
-                osDetails = rvMatch ? ` (v${rvMatch[1]})` : "";
-            } 
-            else if (/Windows/i.test(ua)) {
-                deviceLabel = "Windows PC";
-                const winMatch = ua.match(/Windows NT ([\d.]+)/);
-                osDetails = winMatch ? ` (NT ${winMatch[1]})` : "";
-            }
-
-            const finalLabel = `${deviceLabel}${osDetails}`;
-            acc[finalLabel] = (acc[finalLabel] || 0) + 1;
+            acc[locationLabel] = (acc[locationLabel] || 0) + 1;
             return acc;
         }, {});
 
