@@ -551,7 +551,7 @@ const fetchAnalytics = async () => {
             }
 
             // Construct the requested format: [Device — City, Country, Region]
-            const locationParts = [visit.city, visit.country, visit.region].filter(Boolean);
+            const locationParts = [visit.city, visit.region, visit.country].filter(Boolean);
             const locationString = locationParts.length > 0 ? locationParts.join(', ') : "Unknown Location";
             
             const combinedLabel = `${deviceLabel} — ${locationString}`;
