@@ -495,11 +495,10 @@ const logVisit = async () => {
     if (sessionStorage.getItem('visit_logged')) return;
 
     try {
-        // Fetch geo-data via IP
+        // Fetch geographic data via IP
         const geoRes = await fetch('https://ipapi.co/json/');
         const geo = await geoRes.json();
 
-        // Send combined data to Supabase
         const { error } = await supabaseClient
             .from('page_visits')
             .insert([{
@@ -507,15 +506,15 @@ const logVisit = async () => {
                 user_agent: navigator.userAgent,
                 country: geo.country_name || 'Unknown',
                 region: geo.region || 'Unknown',
-                city: geo.city || 'Unknown'
+                city: geo.city || 'Unknown',
+                ip_address: geo.ip || 'Unknown'
             }]);
         
         if (!error) {
             sessionStorage.setItem('visit_logged', 'true');
         }
     } catch (err) {
-        console.error("Analytics Error:", err.message);
-        // Fallback to basic log if Geo-API fails
+        // Fallback to basic logging if geolocation API is blocked
         await supabaseClient.from('page_visits').insert([{
             page_path: window.location.pathname,
             user_agent: navigator.userAgent
@@ -529,38 +528,33 @@ const logVisit = async () => {
 const fetchAnalytics = async () => {
     const { data, error } = await supabaseClient
         .from('page_visits')
-        .select('user_agent, country, region, city, created_at');
+        .select('user_agent, country, region, city');
 
     if (error) return console.error("Analytics Error:", error);
 
     if (data) {
-        // Map hardware IDs to the names you provided
-        const modelMapping = {
-            'iPhone13,2': 'iPhone 12 Pro',
-            'iPhone9,1': 'iPhone 7',
-            'iPhone9,3': 'iPhone 7'
-        };
-
         const statsMap = data.reduce((acc, visit) => {
             const ua = visit.user_agent;
-            let deviceLabel = "Other Device";
+            let deviceLabel = "Unknown Device";
 
-            // Identify specific devices from your hardware list
+            // Device Identification Logic based on Sample Dataset
             if (/iPhone/i.test(ua)) {
-                const fbdvMatch = ua.match(/FBDV\/(iPhone[\d,]+)/);
-                deviceLabel = fbdvMatch ? (modelMapping[fbdvMatch[1]] || "iPhone") : "iPhone";
+                deviceLabel = "iOS iPhone";
+            } else if (/Android/i.test(ua)) {
+                deviceLabel = "Android Mobile";
             } else if (/Ubuntu/i.test(ua)) {
                 deviceLabel = "Ubuntu PC";
             } else if (/Windows/i.test(ua)) {
                 deviceLabel = "Windows PC";
+            } else if (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua)) {
+                deviceLabel = "MAC";
             }
 
-            // Construct the requested format: [Device - Location/Country/Region]
-            const location = visit.country 
-                ? `${visit.city || visit.region}, ${visit.country}` 
-                : "Unknown Location";
+            // Construct the requested format: [Device — City, Country, Region]
+            const locationParts = [visit.city, visit.country, visit.region].filter(Boolean);
+            const locationString = locationParts.length > 0 ? locationParts.join(', ') : "Unknown Location";
             
-            const combinedLabel = `${deviceLabel} — ${location}`;
+            const combinedLabel = `${deviceLabel} — ${locationString}`;
             
             acc[combinedLabel] = (acc[combinedLabel] || 0) + 1;
             return acc;
