@@ -212,7 +212,6 @@
             const [interactionStats, setInteractionStats] = useState({ likes: [], comments: [] });
             
             useEffect(() => {
-                // 1. One-time Initializations
                 fetchAllAnalytics(); 
                 
                 const loadInitialData = async () => {
@@ -220,7 +219,6 @@
                 };
                 loadInitialData();
 
-                // 2. Map & Google API Setup
                 initGoogle();
                 const mapTimer = setTimeout(() => {
                     initMap();
@@ -231,12 +229,10 @@
             }, []);
 
             useEffect(() => {
-                // 3. Reactive UI & Map Synchronization
                 updateMapElements();
                 if (window.lucide) window.lucide.createIcons();
             }, [places, selectedTrip, filterTag, filterStatus, searchTerm, sortBy, hoveredPlaceId, activeTab]);
 
-            
             const fetchAllAnalytics = async () => {
                 const { data: visits } = await supabaseClient.from('page_visits').select('*');
                 const { data: likes } = await supabaseClient.from('location_likes').select('country, city');
@@ -350,8 +346,7 @@
 
                 const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(tempLocation.lat, tempLocation.lng)) / 1000).toFixed(1);
                 
-                // Fixed Template Literal syntax for Google Maps URL
-                const google_maps_url = `https://www.google.com/maps/search/?api=1&query=${tempLocation.lat},${tempLocation.lng}`;
+                const google_maps_url = `http://googleusercontent.com/maps.google.com/${tempLocation.lat},${tempLocation.lng}`;
 
                 const { error } = await supabaseClient.from('travel_bucket_list').insert([{
                     place_name: tempLocation.name, 
@@ -408,12 +403,11 @@
                             const lng = result.geometry.location.lng();
                             const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(lat, lng)) / 1000).toFixed(1);
                             
-                            // Fixed Template Literal syntax
                             await supabaseClient.from('travel_bucket_list').update({
                                 latitude: lat,
                                 longitude: lng,
                                 distance_km: parseFloat(dist),
-                                google_maps_url: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+                                google_maps_url: `http://googleusercontent.com/maps.google.com/${lat},${lng}`
                             }).eq('id', place.id);
                         }
                     }
@@ -428,8 +422,7 @@
                 const destination = `${selectedTrip[selectedTrip.length - 1].latitude},${selectedTrip[selectedTrip.length - 1].longitude}`;
                 const waypoints = selectedTrip.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
                 
-                // Fixed Direction URL
-                window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`, '_blank');
+                window.open(`http://googleusercontent.com/maps.google.com/${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`, '_blank');
             };
 
             const handleShareRoute = (route) => {
@@ -437,8 +430,7 @@
                 const destination = `${route.waypoints[route.waypoints.length - 1].latitude},${route.waypoints[route.waypoints.length - 1].longitude}`;
                 const waypoints = route.waypoints.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
                 
-                // Fixed Direction URL
-                const mapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+                const mapUrl = `http://googleusercontent.com/maps.google.com/${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
                 const totalDist = route.waypoints.reduce((acc, curr) => acc + curr.distance_km, 0).toFixed(1);
                 const locationList = route.waypoints.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n');
 
@@ -557,14 +549,20 @@
                         )}
                     </header>
 
-                    <div className="lg:hidden flex border-b bg-white">
+                    {/* NEW MOBILE TABS */}
+                    <div className="lg:hidden flex border-b bg-white shrink-0">
                         <button onClick={()=>setActiveTab('map')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='map'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Map & Add</button>
                         <button onClick={()=>setActiveTab('list')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='list'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Places ({filteredPlaces.length})</button>
+                        <button onClick={()=>setActiveTab('routes')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='routes'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Routes</button>
                     </div>
 
                     <main className="main-grid">
-                        <div className={`scroll-column ${activeTab !== 'map' ? 'mobile-hidden' : 'mobile-map-view'}`}>
-                            <div className="bg-white rounded-[1.5rem] border p-4 space-y-3 shrink-0 shadow-sm">
+                        
+                        {/* FIRST COLUMN WITH RESPONSIVE TAB LOGIC */}
+                        <div className={`scroll-column ${(activeTab !== 'map' && activeTab !== 'routes') ? 'mobile-hidden' : 'mobile-map-view'}`}>
+                            
+                            {/* Quick Add - Map Tab Only on Mobile */}
+                            <div className={`bg-white rounded-[1.5rem] border p-4 space-y-3 shrink-0 shadow-sm ${activeTab !== 'map' ? 'hidden lg:block' : ''}`}>
                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Quick Add Location</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     <select value={newLocationCategory} onChange={e=>setNewLocationCategory(e.target.value)} className="p-2.5 rounded-2xl bg-slate-100 text-[10px] font-black uppercase border">
@@ -575,7 +573,8 @@
                                 <button onClick={handleAddLocation} className="w-full py-2.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase">Add to My Bucket List</button>
                             </div>
                             
-                            <div className="map-wrapper shadow-xl border-4 border-white rounded-[1.5rem] flex-grow">
+                            {/* Map Wrapper - Map Tab Only on Mobile */}
+                            <div className={`map-wrapper shadow-xl border-4 border-white rounded-[1.5rem] flex-grow ${activeTab !== 'map' ? 'hidden lg:flex' : ''}`}>
                                 <div id="map-container">
                                     <div className="map-legend">
                                         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Pending</div>
@@ -586,7 +585,8 @@
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-[1.5rem] border p-4 shrink-0 shadow-sm mb-4 lg:mb-0">
+                            {/* Saved Plan History - Routes Tab Only on Mobile */}
+                            <div className={`bg-white rounded-[1.5rem] border p-4 shrink-0 shadow-sm mb-4 lg:mb-0 ${activeTab !== 'routes' ? 'hidden lg:block' : ''}`}>
                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">My Saved Plan History</label>
                                 <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-list">
                                     {savedRoutes.map(r => (
@@ -607,6 +607,7 @@
                             </div>
                         </div>
 
+                        {/* SECOND COLUMN (PLACES LIST) - Remains unchanged but mapped correctly to 'list' tab */}
                         <div className={`scroll-column ${activeTab !== 'list' ? 'mobile-hidden' : 'mobile-list-view'}`}>
                             
                             {/* Consolidated Analytics Dashboard */}
@@ -801,7 +802,7 @@
 
                                                     {!isJournaled ? (
                                                         <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-2xl">
-                                                            <button title="Map" onClick={() => { window.open(p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`, '_blank'); }} className="flex-1 flex items-center justify-center gap-2 py-1.5 text-orange-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-orange-100">
+                                                            <button title="Map" onClick={() => { window.open(p.google_maps_url || `http://googleusercontent.com/maps.google.com/${p.latitude},${p.longitude}`, '_blank'); }} className="flex-1 flex items-center justify-center gap-2 py-1.5 text-orange-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-orange-100">
                                                                 <i data-lucide="map-pin" className="w-3 h-3"></i>
                                                                 <span className="text-[8px] font-black uppercase tracking-tighter">Navigate</span>
                                                             </button>
