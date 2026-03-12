@@ -213,7 +213,6 @@
             
             useEffect(() => {
                 // 1. One-time Initializations
-                logVisit();
                 fetchAllAnalytics(); 
                 
                 const loadInitialData = async () => {
@@ -237,44 +236,7 @@
                 if (window.lucide) window.lucide.createIcons();
             }, [places, selectedTrip, filterTag, filterStatus, searchTerm, sortBy, hoveredPlaceId, activeTab]);
 
-            const logVisit = async () => {
-                if (sessionStorage.getItem('visit_logged')) return;
-
-                try {
-                    const geoRes = await fetch('https://ipapi.co/json/');
-                    const geo = await geoRes.json();
-
-                    // IP and Browser verification to exclude your specific visits
-                    const isOwner = 
-            currentIp.startsWith("2402:4000:b280:b2d") || 
-            ua.includes("rv:148.0") || 
-            ua.includes("CriOS/145.0.7632.108") ||
-            window.location.pathname.includes('/mnt/');
-
-        if (isOwner) {
-            console.log("Owner visit detected. Skipping log.");
-            return;
-        }
-
-                    const { error } = await supabaseClient.from('page_visits').insert([{
-                        page_path: window.location.pathname,
-                        user_agent: navigator.userAgent,
-                        country: geo.country_name || 'Unknown',
-                        region: geo.region || 'Unknown',
-                        city: geo.city || 'Unknown',
-                        ip_address: geo.ip || 'Unknown'
-                    }]);
-                    
-                    if (!error) sessionStorage.setItem('visit_logged', 'true');
-                } catch (err) {
-                    // Fallback to basic logging if geo fails
-                    await supabaseClient.from('page_visits').insert([{
-                        page_path: window.location.pathname,
-                        user_agent: navigator.userAgent
-                    }]);
-                }
-            };
-
+            
             const fetchAllAnalytics = async () => {
                 const { data: visits } = await supabaseClient.from('page_visits').select('*');
                 const { data: likes } = await supabaseClient.from('location_likes').select('country, city');
