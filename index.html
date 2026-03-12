@@ -253,16 +253,49 @@
         setPendingComments(latestComments || []);
         
         const processStats = (data, isVisit = false) => {
-            if (!data) return [];
-            const statsMap = data.reduce((acc, item) => {
-                let label = isVisit 
-                    ? `${item.user_agent?.includes("iPhone") ? "iPhone" : "PC"} — ${[item.city, item.country].filter(Boolean).join(', ')}`
-                    : `${item.city || 'Unknown'}, ${item.country || 'Unknown'}`;
-                acc[label] = (acc[label] || 0) + 1;
-                return acc;
-            }, {});
-            return Object.entries(statsMap).map(([path, count]) => ({ path, count })).sort((a,b) => b.count - a.count);
-        };
+    if (!data) return [];
+
+    const getDeviceType = (ua) => {
+    if (!ua) return "Unknown";
+    
+    // Check for Android first
+    if (ua.includes("Android")) {
+        // If it contains 'wv', it's an in-app browser on Android
+        return ua.includes("; wv") ? "Android (In-App)" : "Android Mobile";
+    }
+    
+    // Check for iPhone
+    if (ua.includes("iPhone")) {
+        // iPhone in-app browsers often contain 'FBAN' (Facebook) or 'Instagram'
+        return (ua.includes("FBAN") || ua.includes("FBIOS")) ? "iPhone (In-App)" : "iPhone";
+    }
+    
+    // Desktop checks
+    if (ua.includes("Windows NT")) return "Windows PC";
+    if (ua.includes("Macintosh")) return "Mac PC";
+    if (ua.includes("Linux") && !ua.includes("Android")) return "Linux PC";
+    
+    return "Other Device";
+};
+
+    const statsMap = data.reduce((acc, item) => {
+        let label;
+        if (isVisit) {
+            const device = getDeviceType(item.user_agent);
+            const location = [item.city, item.country].filter(Boolean).join(', ') || "Unknown Location";
+            label = `${device} — ${location}`;
+        } else {
+            label = `${item.city || 'Unknown'}, ${item.country || 'Unknown'}`;
+        }
+
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+    }, {});
+
+    return Object.entries(statsMap)
+        .map(([path, count]) => ({ path, count }))
+        .sort((a, b) => b.count - a.count);
+};
 
         setAnalytics({ total: visits?.length || 0, pathStats: processStats(visits, true) });
         setInteractionStats({
