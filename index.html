@@ -245,12 +245,16 @@
                     const geo = await geoRes.json();
 
                     // IP and Browser verification to exclude your specific visits
-                    const isOwner = geo.ip === "2402:4000:b280:b2d:7056:9e2d:f09c:91cb" && navigator.userAgent.includes("rv:148.0");
+                    const isOwner = 
+            currentIp.startsWith("2402:4000:b280:b2d") || 
+            ua.includes("rv:148.0") || 
+            ua.includes("CriOS/145.0.7632.108") ||
+            window.location.pathname.includes('/mnt/');
 
-                    if (isOwner) {
-                        console.log("Owner visit detected. Skipping log.");
-                        return;
-                    }
+        if (isOwner) {
+            console.log("Owner visit detected. Skipping log.");
+            return;
+        }
 
                     const { error } = await supabaseClient.from('page_visits').insert([{
                         page_path: window.location.pathname,
