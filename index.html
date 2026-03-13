@@ -478,35 +478,147 @@
     });
 };
             
-            const repairDatabaseRecords = async () => {
-    triggerToast("Starting Deep Audit...");
+    const repairLocality = async () => {
+    triggerToast("Scanning for missing locality data...");
     
-    // Fetch all current places from Supabase
-    const { data: allPlaces, error } = await supabaseClient.from('travel_bucket_list').select('*');
-    if (error) return;
+    // 1. Fetch only records where locality is missing, null, or 'Unknown Area'
+    const { data: missingPlaces, error } = await supabaseClient
+        .from('travel_bucket_list')
+        .select('*')
+        .or('locality.is.null, locality.eq., locality.eq.Unknown Area');
 
-    for (const place of allPlaces) {
-        // Check if the locality is missing or generic
-        if (!place.locality || place.locality === "Unknown Area") {
-            
-            // Perform Reverse Geocoding using existing coordinates
-            const accurateArea = await getAreaFromCoords(place.latitude, place.longitude);
-            
-            // Calculate distance from Ekala
-            const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(place.latitude, place.longitude)) / 1000).toFixed(1);
+    if (error) {
+        console.error("Fetch error:", error);
+        return;
+    }
 
-            // Update the record in Supabase
-            await supabaseClient.from('travel_bucket_list').update({
-                locality: accurateArea,
-                distance_km: parseFloat(dist),
-                // Ensure a valid Google Maps URL exists
-                google_maps_url: place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`
-            }).eq('id', place.id);
-        }
+    if (!missingPlaces || missingPlaces.length === 0) {
+        triggerToast("All localities are already filled.");
+        return;
+    }
+
+    const geocoder = new google.maps.Geocoder();
+
+    // 2. Process only the records needing repair
+    for (const place of missingPlaces) {
+        // We use Reverse Geocoding: Coordinate -> Address Components
+        const latLng = { lat: parseFloat(place.latitude), lng: parseFloat(place.longitude) };
+
+        geocoder.geocode({ location: latLng }, async (results, status) => {
+            if (status === "OK" && results[0]) {
+                const components = results[0].address_components;
+                
+                // 3. Extract Locality with fallback logic
+                const getComponent = (types) => 
+                    components.find(c => types.some(t => c.types.includes(t)))?.long_name;
+
+                // Priority: Specific Town -> Area/Suburb -> District (Nearest City)
+                const accurateLocality = getComponent(["locality"]) || 
+                                         getComponent(["sublocality_level_1"]) || 
+                                         getComponent(["administrative_area_level_2"]) || 
+                                         "Unknown Area";
+
+                // 4. Update only the locality field to protect other data
+                const { error: updateError } = await supabaseClient
+                    .from('travel_bucket_list')
+                    .update({ locality: accurateLocality })
+                    .eq('id', place.id);
+
+                if (updateError) {
+                    console.error(`Update failed for ${place.place_name}:`, updateError);
+                } else {
+                    console.log(`Repaired Locality for ${place.place_name}: ${accurateLocality}`);
+                }
+            } else {
+                console.warn(`Reverse geocode failed for ${place.place_name} at ${place.latitude},${place.longitude}: ${status}`);
+            }
+        });
     }
     
-    fetchPlaces(); // Refresh UI
-    triggerToast("Locality Data Repaired");
+    setTimeout(() => {
+        fetchPlaces(); 
+        triggerToast("Locality metadata sync complete");
+    }, 3000);
+};
+
+const exportArticlesAndClearDatabase = async () => {
+    // 1. Multi-Step Confirmation
+    const step1 = confirm("CRITICAL WARNING: This will download a backup of all AI articles and PERMANENTLY WIPE the following tables:\n- travel_bucket_list\n- saved_travel_routes\n- location_comments\n- location_likes");
+    if (!step1) return;
+    
+    const step2 = confirm("Are you absolutely sure? This action cannot be reversed.");
+    if (!step2) return;
+
+    try {
+        triggerToast("Generating Article Backup...");
+
+        // 2. Fetch data for backup before any deletions
+        const { data: allRecords, error: fetchError } = await supabaseClient
+            .from('travel_bucket_list')
+            .select('place_name, ai_article, locality');
+
+        if (fetchError) throw fetchError;
+
+        // 3. Build the text file content
+        let fileContent = `ADVENTURE JOURNAL FULL SYSTEM EXPORT\n`;
+        fileContent += `Export Date: ${new Date().toLocaleString()}\n`;
+        fileContent += `------------------------------------------\n\n`;
+
+        let articleCount = 0;
+        allRecords.forEach(record => {
+            if (record.ai_article) {
+                articleCount++;
+                fileContent += `📍 LOCATION: ${record.place_name}\n`;
+                fileContent += `🗺️ LOCALITY: ${record.locality || 'N/A'}\n`;
+                fileContent += `📝 ARTICLE:\n${record.ai_article}\n`;
+                fileContent += `\n==========================================\n\n`;
+            }
+        });
+
+        // 4. Trigger the Download
+        const blob = new Blob([fileContent], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Full_Journal_Backup_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        // 5. Purge All Tables
+        triggerToast(`Backup Saved (${articleCount} articles). Cleaning Database...`);
+        
+        const tablesToPurge = [
+            'location_comments',
+            'location_likes',
+            'saved_travel_routes',
+            'travel_bucket_list' // Deleted last to maintain potential foreign key integrity during purge
+        ];
+
+        for (const tableName of tablesToPurge) {
+            console.log(`Purging ${tableName}...`);
+            const { error: deleteError } = await supabaseClient
+                .from(tableName)
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000'); // Standard UUID filter for purge
+
+            if (deleteError) {
+                console.error(`Error purging ${tableName}:`, deleteError);
+                throw new Error(`Failed to clear ${tableName}`);
+            }
+        }
+
+        triggerToast("All Tables Successfully Purged");
+        
+        // Refresh local state/UI
+        if (typeof fetchPlaces === 'function') fetchPlaces();
+        if (typeof fetchRoutes === 'function') fetchRoutes(); // If you have a separate route fetcher
+
+    } catch (err) {
+        console.error("Purge Error:", err);
+        triggerToast(`Purge Failed: ${err.message}`);
+    }
 };
 
 
@@ -651,6 +763,8 @@ const fetchRouteWeather = async (waypoints) => {
                                 </h1>
                             </div>
                             
+
+                            
                             <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border">
                                 <div className="w-12 md:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
                                     <div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${progress}%`}}></div>
@@ -658,6 +772,15 @@ const fetchRouteWeather = async (waypoints) => {
                                 <span className="text-[10px] font-black text-slate-500">{progress}%</span>
                             </div>
                         </div>
+                        
+                                                    <button 
+    onClick={exportArticlesAndClearDatabase}
+    className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-rose-50 border-2 border-rose-100 text-rose-600 hover:bg-rose-100 transition-all group"
+>
+    <i data-lucide="trash-2" className="w-4 h-4 group-hover:animate-pulse"></i>
+    <span className="text-[10px] font-black uppercase tracking-widest">Purge & Backup Database</span>
+</button>
+
                         {selectedTrip.length > 0 && (
                             <div className="flex items-center gap-1 md:gap-2">
                                 <span className="hidden sm:inline text-xs font-black text-blue-600">{(selectedTrip.reduce((a,b)=>a+b.distance_km,0)).toFixed(1)}KM</span>
@@ -907,7 +1030,7 @@ const fetchRouteWeather = async (waypoints) => {
                                     <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="p-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase"><option value="Pending">Pending</option><option value="Completed">Visited</option><option value="All">All</option></select>
                                     <select value={filterTag} onChange={e=>setFilterTag(e.target.value)} className="p-2 rounded-xl bg-slate-50 text-[10px] font-black uppercase border"><option value="All">All Tags</option>{VALID_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
                                     
-                                    <button onClick={repairDatabaseRecords} className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
+                                    <button onClick={repairLocality} className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
                                         <i data-lucide="shield-check" className="w-3.5 h-3.5"></i>Repair Database Metadata
                                     </button>
                                 </div>
