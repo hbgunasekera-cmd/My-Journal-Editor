@@ -345,19 +345,39 @@
             };
 
             const initGoogle = async () => {
-                const { Autocomplete } = await google.maps.importLibrary("places");
-                if (!autocompleteRef.current) return;
-                const autocomplete = new Autocomplete(autocompleteRef.current, { componentRestrictions: { country: "lk" } });
-                autocomplete.addListener("place_changed", () => {
-                    const place = autocomplete.getPlace();
-                    if (place.geometry) {
-                        setTempLocation({
-                            name: place.name, lat: place.geometry.location.lat(), lng: place.geometry.location.lng(),
-                            area: place.address_components?.find(c => c.types.includes("locality"))?.long_name || ""
-                        });
-                    }
-                });
-            };
+            
+    const { Autocomplete } = await google.maps.importLibrary("places");
+    if (!autocompleteRef.current) return;
+    
+    const autocomplete = new Autocomplete(autocompleteRef.current, { 
+        componentRestrictions: { country: "lk" },
+        // Explicitly request address components
+        fields: ["address_components", "geometry", "name"] 
+    });
+
+    autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (place.geometry) {
+            // Robust locality extraction
+            const components = place.address_components || [];
+            const getComponent = (types) => 
+                components.find(c => types.some(t => c.types.includes(t)))?.long_name;
+
+            // Try Locality -> Sublocality -> District
+            const areaName = getComponent(["locality"]) || 
+                             getComponent(["sublocality_level_1"]) || 
+                             getComponent(["administrative_area_level_2"]) || 
+                             "Unknown Area";
+
+            setTempLocation({
+                name: place.name, 
+                lat: place.geometry.location.lat(), 
+                lng: place.geometry.location.lng(),
+                area: areaName
+            });
+        }
+    });
+};
             
             const handleManualArticle = async (record) => {
                 const existingArticle = record.ai_article || "";
@@ -422,40 +442,63 @@
                 if (!error) { fetchSavedRoutes(); triggerToast('Route Saved'); }
             };
             
+            const getAreaFromCoords = (lat, lng) => {
+    return new Promise((resolve) => {
+        const geocoder = new google.maps.Geocoder();
+        const latlng = { lat: parseFloat(lat), lng: parseFloat(lng) };
+
+        geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                const components = results[0].address_components;
+                const getComponent = (types) => 
+                    components.find(c => types.some(t => c.types.includes(t)))?.long_name;
+
+                // Priority Hierarchy for Sri Lanka: 
+                // 1. Locality (Town) 
+                // 2. Sublocality (Village/Ward) 
+                // 3. Admin Area 2 (District - e.g., Matale, Nuwara Eliya)
+                const area = getComponent(["locality"]) || 
+                             getComponent(["sublocality_level_1"]) || 
+                             getComponent(["administrative_area_level_2"]) || 
+                             "Unknown Area";
+                resolve(area);
+            } else {
+                resolve("Unknown Area");
+            }
+        });
+    });
+};
+            
             const repairDatabaseRecords = async () => {
-                triggerToast("Starting Database Audit...");
-                const service = new google.maps.places.PlacesService(document.createElement('div'));
+    triggerToast("Starting Deep Audit...");
+    
+    // Fetch all current places from Supabase
+    const { data: allPlaces, error } = await supabaseClient.from('travel_bucket_list').select('*');
+    if (error) return;
 
-                const findPlace = (query) => new Promise((resolve) => {
-                    const request = { query: query, fields: ['name', 'geometry'] };
-                    service.findPlaceFromQuery(request, (results, status) => {
-                        if (status === google.maps.places.PlacesServiceStatus.OK && results) resolve(results[0]);
-                        else resolve(null);
-                    });
-                });
+    for (const place of allPlaces) {
+        // Check if the locality is missing or generic
+        if (!place.locality || place.locality === "Unknown Area") {
+            
+            // Perform Reverse Geocoding using existing coordinates
+            const accurateArea = await getAreaFromCoords(place.latitude, place.longitude);
+            
+            // Calculate distance from Ekala
+            const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(place.latitude, place.longitude)) / 1000).toFixed(1);
 
-                const { data: allPlaces, error } = await supabaseClient.from('travel_bucket_list').select('*');
-                if (error) return;
-
-                for (const place of allPlaces) {
-                    if (!place.google_maps_url || !place.latitude) {
-                        const result = await findPlace(place.place_name);
-                        if (result && result.geometry) {
-                            const lat = result.geometry.location.lat();
-                            const lng = result.geometry.location.lng();
-                            const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(lat, lng)) / 1000).toFixed(1);
-                            
-                            await supabaseClient.from('travel_bucket_list').update({
-                                latitude: lat,
-                                longitude: lng,
-                                distance_km: parseFloat(dist),
-                                google_maps_url: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}).eq('id', place.id);
-                        }
-                    }
-                }
-                fetchPlaces();
-                triggerToast("Audit Complete");
-            };
+            // Update the record in Supabase
+            await supabaseClient.from('travel_bucket_list').update({
+                locality: accurateArea,
+                distance_km: parseFloat(dist),
+                // Ensure a valid Google Maps URL exists
+                google_maps_url: place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`
+            }).eq('id', place.id);
+        }
+    }
+    
+    fetchPlaces(); // Refresh UI
+    triggerToast("Locality Data Repaired");
+};
 
             const handleStartRoute = () => {
                 if (selectedTrip.length === 0) return;
