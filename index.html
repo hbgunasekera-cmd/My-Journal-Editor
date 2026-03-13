@@ -478,61 +478,37 @@
     });
 };
             
-       const repairDatabaseRecords = async () => {
+            const repairDatabaseRecords = async () => {
     triggerToast("Starting Deep Audit...");
     
     // Fetch all current places from Supabase
     const { data: allPlaces, error } = await supabaseClient.from('travel_bucket_list').select('*');
     if (error) return;
 
-    const geocoder = new google.maps.Geocoder();
-
     for (const place of allPlaces) {
-        // We use the place_name + " Sri Lanka" to get the most accurate fresh data from Google
-        const searchQuery = `${place.place_name}, Sri Lanka`;
+        // Check if the locality is missing or generic
+        if (!place.locality || place.locality === "Unknown Area") {
+            
+            // Perform Reverse Geocoding using existing coordinates
+            const accurateArea = await getAreaFromCoords(place.latitude, place.longitude);
+            
+            // Calculate distance from Ekala
+            const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(place.latitude, place.longitude)) / 1000).toFixed(1);
 
-        geocoder.geocode({ address: searchQuery }, async (results, status) => {
-            if (status === "OK" && results[0]) {
-                const geo = results[0].geometry.location;
-                const components = results[0].address_components;
-                
-                // 1. Repair Locality: Try Locality -> Sublocality -> District
-                const getComponent = (types) => 
-                    components.find(c => types.some(t => c.types.includes(t)))?.long_name;
-
-                const accurateArea = getComponent(["locality"]) || 
-                                     getComponent(["sublocality_level_1"]) || 
-                                     getComponent(["administrative_area_level_2"]) || 
-                                     "Unknown Area";
-
-                // 2. Repair Lat/Long
-                const newLat = geo.lat();
-                const newLng = geo.lng();
-
-                // 3. Repair Distance (Recalculated from Ekala)
-                const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(newLat, newLng)) / 1000).toFixed(1);
-
-                // 4. Repair Google Maps URL (Using the specific Place ID for better accuracy)
-                const placeId = results[0].place_id;
-                const newMapsUrl = `https://www.google.com/maps/search/?api=1&query=${newLat},${newLng}&query_place_id=${placeId}`;
-
-                // Perform the Update
-                await supabaseClient.from('travel_bucket_list').update({
-                    locality: accurateArea,
-                    latitude: newLat,
-                    longitude: newLng,
-                    distance_km: parseFloat(dist),
-                    google_maps_url: newMapsUrl
-                }).eq('id', place.id);
-            }
-        });
+            // Update the record in Supabase
+            await supabaseClient.from('travel_bucket_list').update({
+                locality: accurateArea,
+                distance_km: parseFloat(dist),
+                // Ensure a valid Google Maps URL exists
+                google_maps_url: place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`
+            }).eq('id', place.id);
+        }
     }
     
-    setTimeout(() => {
-        fetchPlaces(); // Refresh UI
-        triggerToast("Metadata Repaired & Synced");
-    }, 2000);
+    fetchPlaces(); // Refresh UI
+    triggerToast("Locality Data Repaired");
 };
+
 
 const fetchRouteWeather = async (waypoints) => {
     const newWeatherData = {};
