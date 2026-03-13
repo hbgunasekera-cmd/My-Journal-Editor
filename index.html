@@ -4,180 +4,106 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>My Journal - Advanced Trip Planner</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@0.473.0/dist/umd/lucide.min.js"></script>
+    
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-    
-    /* General Reset & Layout Lock */
-    body { 
-        font-family: 'Plus Jakarta Sans', sans-serif; 
-        background-color: #F8FAFC; 
-        margin: 0;
-        padding: 0;
-        overflow: hidden; /* Prevents double scrollbars */
-        height: 100vh;
-        width: 100vw;
-    }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        /* FIX: Hides the Routing Instruction Legend/Mask */
+        .leaflet-routing-container { display: none !important; }
 
-    /* Desktop Grid Fixes */
-    @media (min-width: 1024px) { 
-        .main-grid { 
-            display: grid; 
-            /* FIXED: minmax prevents content and scrollbars from pushing grid boundaries */
-            grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); 
-            height: calc(100vh - 80px); 
-            padding: 1rem; 
-            gap: 2%; 
-            width: 100%;
-            box-sizing: border-box;
-            overflow: hidden;
-        } 
-        .scroll-column { 
-            overflow-y: auto; 
-            overflow-x: hidden;
-            height: 100%; 
-            padding-right: 8px; 
-            min-width: 0; 
-            /* FIXED: Force flex layout so Map can safely flex-grow without collapsing */
-            display: flex;
-            flex-direction: column;
-            /* FIXED: Reserves space for the scrollbar so the layout never pops */
-            scrollbar-gutter: stable;
+        /* General Reset & Layout Lock */
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #F8FAFC; 
+            margin: 0; padding: 0; overflow: hidden;
+            height: 100vh; width: 100vw;
         }
-        .map-wrapper { 
-            flex-grow: 1; 
-            min-height: 350px; 
-            display: flex; 
-            flex-direction: column; 
-            margin-bottom: 0 !important;
+
+        /* Desktop Grid Fixes */
+        @media (min-width: 1024px) { 
+            .main-grid { 
+                display: grid; 
+                grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); 
+                height: calc(100vh - 80px); 
+                padding: 1rem; gap: 2%; 
+                width: 100%; box-sizing: border-box; overflow: hidden;
+            } 
+            .scroll-column { 
+                overflow-y: auto; overflow-x: hidden; height: 100%; 
+                padding-right: 8px; min-width: 0; display: flex;
+                flex-direction: column; scrollbar-gutter: stable;
+            }
+            .map-wrapper { 
+                flex-grow: 1; min-height: 350px; display: flex; 
+                flex-direction: column; margin-bottom: 0 !important;
+            }
+            #map-container { flex-grow: 1; height: 100% !important; }
         }
-        #map-container {
-            flex-grow: 1;
-            height: 100% !important; /* Forces Leaflet to respect the flex boundary */
+
+        /* Mobile Adjustments */
+        @media (max-width: 1023px) {
+            .main-grid { 
+                display: flex; flex-direction: column; 
+                height: calc(100vh - 130px); padding: 0.75rem; 
+                width: 100%; box-sizing: border-box; overflow: hidden;
+            }
+            .mobile-hidden { display: none !important; }
+            .mobile-map-view { height: 100%; display: flex; flex-direction: column; gap: 1rem; }
+            .mobile-list-view { height: 100%; overflow-y: auto; }
+            #map-container { height: 55vh !important; flex-shrink: 0; }
         }
-    }
 
-    /* Mobile Adjustments */
-    @media (max-width: 1023px) {
-        .main-grid { 
-            display: flex; 
-            flex-direction: column; 
-            height: calc(100vh - 130px); 
-            padding: 0.75rem; 
-            width: 100%;
-            box-sizing: border-box;
-            overflow: hidden;
+        /* Universal Custom Scrollbar */
+        .scroll-column::-webkit-scrollbar,
+        .scrollable-list::-webkit-scrollbar { width: 6px; }
+        .scroll-column::-webkit-scrollbar-thumb,
+        .scrollable-list::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        .scroll-column::-webkit-scrollbar-track,
+        .scrollable-list::-webkit-scrollbar-track { background: transparent; }
+        
+        /* Marker Styles */
+        .marker-pending { background-color: #f97316; border: 2px solid white; border-radius: 50%; }
+        .marker-done { background-color: #10b981; border: 2px solid white; border-radius: 50%; }
+        .marker-locked { background-color: #a855f7; border: 2px solid white; border-radius: 50%; }
+        .marker-selected { background-color: #ef4444; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; }
+        
+        .marker-hover { 
+            background-color: #facc15; border: 3px solid white; border-radius: 50%; 
+            box-shadow: 0 0 20px rgba(250, 204, 21, 1); z-index: 9999 !important; 
         }
-        .mobile-hidden { display: none !important; }
-        .mobile-map-view { 
-            height: 100%; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 1rem; 
+
+        @keyframes smart-pulse { 
+            0% { box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.7); } 
+            100% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 
         }
-        .mobile-list-view { 
-            height: 100%; 
-            overflow-y: auto; 
+        .marker-smart { background-color: #3b82f6; border: 2px solid white; border-radius: 50%; animation: smart-pulse 2s infinite; }
+
+        .location-tooltip {
+            background: rgba(15, 23, 42, 0.9); border: none; border-radius: 4px;
+            color: white; font-size: 8px; font-weight: 800; padding: 2px 6px; text-transform: uppercase;
         }
-        #map-container { 
-            height: 55vh !important;
-            flex-shrink: 0;
+
+        .location-card { position: relative; overflow: hidden; }
+        .location-card:hover { border-color: #CBD5E1; transform: translateY(-2px); }
+        
+        .locked-overlay {
+            position: absolute; top: 0; left: 0; right: 0; height: 128px;
+            z-index: 20; background: rgba(255, 255, 255, 0.2);
+            backdrop-blur: 2px; display: flex; align-items: center; justify-content: center;
         }
-    }
-
-    /* FIXED: Universal Custom Scrollbar to prevent OS-level width shifts */
-    .scroll-column::-webkit-scrollbar,
-    .scrollable-list::-webkit-scrollbar { width: 6px; }
-    
-    .scroll-column::-webkit-scrollbar-thumb,
-    .scrollable-list::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
-    
-    .scroll-column::-webkit-scrollbar-track,
-    .scrollable-list::-webkit-scrollbar-track { background: transparent; }
-    
-    /* Marker & Legend Styles (Strictly Preserved) */
-    .marker-pending { background-color: #f97316; border: 2px solid white; border-radius: 50%; }
-    .marker-done { background-color: #10b981; border: 2px solid white; border-radius: 50%; }
-    .marker-locked { background-color: #a855f7; border: 2px solid white; border-radius: 50%; }
-    .marker-selected { background-color: #ef4444; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; }
-    
-    .marker-hover { 
-        background-color: #facc15; 
-        border: 3px solid white; 
-        border-radius: 50%; 
-        box-shadow: 0 0 20px rgba(250, 204, 21, 1); 
-        z-index: 9999 !important; 
-    }
-
-    @keyframes smart-pulse { 
-        0% { box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.7); } 
-        100% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 
-    }
-    .marker-smart { background-color: #3b82f6; border: 2px solid white; border-radius: 50%; animation: smart-pulse 2s infinite; }
-
-    .map-legend { 
-        position: absolute; 
-        top: 12px; 
-        right: 12px; 
-        z-index: 1000; 
-        background: white; 
-        padding: 8px 12px; 
-        border-radius: 12px; 
-        border: 1px solid #e2e8f0; 
-        font-size: 8px; 
-        font-weight: 800; 
-        text-transform: uppercase; 
-        display: flex; 
-        flex-direction: column; 
-        gap: 4px; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-    }
-    
-    .location-tooltip {
-        background: rgba(15, 23, 42, 0.9);
-        border: none;
-        border-radius: 4px;
-        color: white;
-        font-size: 8px;
-        font-weight: 800;
-        padding: 2px 6px;
-        text-transform: uppercase;
-    }
-
-    .location-card {
-    position: relative;
-    overflow: hidden; /* Ensure the overlay doesn't bleed out */
-}
-
-    .location-card:hover {
-        border-color: #CBD5E1;
-        transform: translateY(-2px);
-    }
-    
-    .locked-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 128px; /* Match your image height (h-32) */
-    z-index: 20;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-blur: 2px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-
-</style>
+    </style>
 </head>
 <body>
     <div id="root"></div>
@@ -218,11 +144,14 @@
             const markersLayer = useRef(L.layerGroup());
             const hoverLayer = useRef(L.layerGroup());
             const polylineRef = useRef(null);
+            const routingControlRef = useRef(null);
             const autocompleteRef = useRef(null);            
             const [analytics, setAnalytics] = useState({ total: 0, pathStats: [] });
             const [interactionStats, setInteractionStats] = useState({ likes: [], comments: [] });
             const [pendingComments, setPendingComments] = useState([]); 
             const [weatherData, setWeatherData] = useState({});
+            
+            const currentRouteIdsRef = useRef("");
             
             
             useEffect(() => {
@@ -706,40 +635,102 @@ const fetchRouteWeather = async (waypoints) => {
                 else { triggerToast("Error updating name"); }
             };
 
-            const updateMapElements = () => {
-                if (!mapRef.current) return;
-                markersLayer.current.clearLayers();
-                hoverLayer.current.clearLayers();
-                if (polylineRef.current) mapRef.current.removeLayer(polylineRef.current);
+    const updateMapElements = () => {
+    if (!mapRef.current) return;
 
-                places.forEach(p => {
-                    const isSelected = selectedTrip.find(st => st.id === p.id);
-                    if (isSelected) return;
-                    let iconClass = p.status === 'done' ? 'marker-done' : (lockedLocationIds.has(p.id) ? 'marker-locked' : 'marker-pending');
-                    if (smartChoiceIds.includes(p.id)) iconClass = 'marker-smart';
-                    L.marker([p.latitude, p.longitude], { icon: L.divIcon({ className: iconClass, iconSize: [12, 12] }) })
-                    .bindTooltip(p.place_name, { permanent: false, direction: 'top', className: 'location-tooltip' }).addTo(markersLayer.current);
-                });
+    // 1. Clear standard marker layers
+    markersLayer.current.clearLayers();
+    hoverLayer.current.clearLayers();
 
-                selectedTrip.forEach((p, idx) => {
-                    L.marker([p.latitude, p.longitude], { 
-                        icon: L.divIcon({ className: 'marker-selected', html: `<span>${idx + 1}</span>`, iconSize: [24, 24] }), zIndexOffset: 2000 
-                    }).bindTooltip(p.place_name, { permanent: false, direction: 'top', className: 'location-tooltip' }).addTo(markersLayer.current);
-                });
+    // 2. Clear old polyline if it exists
+    if (polylineRef.current) {
+        mapRef.current.removeLayer(polylineRef.current);
+        polylineRef.current = null;
+    }
 
-                if (hoveredPlaceId) {
-                    const hp = places.find(p => p.id === hoveredPlaceId);
-                    if (hp) {
-                        L.marker([hp.latitude, hp.longitude], { icon: L.divIcon({ className: 'marker-hover', iconSize: [24, 24] }), zIndexOffset: 5000 })
-                        .bindTooltip(hp.place_name, { permanent: true, direction: 'top', className: 'location-tooltip' }).addTo(hoverLayer.current);
-                    }
-                }
+    // 3. Create a unique string for the current trip to check if it actually changed
+    const newRouteSignature = selectedTrip.map(p => p.id).join(',');
 
-                if (selectedTrip.length > 0) {
-                    const coords = [[EKALA.lat, EKALA.lng], ...selectedTrip.map(p => [p.latitude, p.longitude])];
-                    polylineRef.current = L.polyline(coords, { color: '#ef4444', weight: 3, dashArray: '8, 12' }).addTo(mapRef.current);
-                }
-            };
+    // Handle Routing Cleanup
+    if (selectedTrip.length === 0) {
+        if (routingControlRef.current) {
+            mapRef.current.removeControl(routingControlRef.current);
+            routingControlRef.current = null;
+        }
+        currentRouteIdsRef.current = ""; // Reset signature
+    }
+
+    // 4. Draw standard markers (Pending, Done, Locked)
+    places.forEach(p => {
+        const isSelected = selectedTrip.find(st => st.id === p.id);
+        if (isSelected) return; 
+        
+        let iconClass = p.status === 'done' ? 'marker-done' : (lockedLocationIds.has(p.id) ? 'marker-locked' : 'marker-pending');
+        if (smartChoiceIds.includes(p.id)) iconClass = 'marker-smart';
+        
+        L.marker([p.latitude, p.longitude], { 
+            icon: L.divIcon({ className: iconClass, iconSize: [12, 12] }) 
+        })
+        .bindTooltip(p.place_name, { permanent: false, direction: 'top', className: 'location-tooltip' })
+        .addTo(markersLayer.current);
+    });
+
+    // 5. Draw Selected Route Markers (Numbered)
+    selectedTrip.forEach((p, idx) => {
+        L.marker([p.latitude, p.longitude], { 
+            icon: L.divIcon({ className: 'marker-selected', html: `<span>${idx + 1}</span>`, iconSize: [24, 24] }), 
+            zIndexOffset: 2000 
+        })
+        .bindTooltip(p.place_name, { permanent: false, direction: 'top', className: 'location-tooltip' })
+        .addTo(markersLayer.current);
+    });
+
+    // 6. Draw Hover Marker
+    if (hoveredPlaceId) {
+        const hp = places.find(p => p.id === hoveredPlaceId);
+        if (hp) {
+            L.marker([hp.latitude, hp.longitude], { 
+                icon: L.divIcon({ className: 'marker-hover', iconSize: [24, 24] }), 
+                zIndexOffset: 5000 
+            })
+            .bindTooltip(hp.place_name, { permanent: true, direction: 'top', className: 'location-tooltip' })
+            .addTo(hoverLayer.current);
+        }
+    }
+
+    // 7. FIXED ROAD ROUTING LOGIC (With State Guard)
+    if (selectedTrip.length > 0 && currentRouteIdsRef.current !== newRouteSignature) {
+        
+        // Update the signature so we don't recalculate on the next hover
+        currentRouteIdsRef.current = newRouteSignature;
+
+        const waypoints = [
+            L.latLng(EKALA.lat, EKALA.lng),
+            ...selectedTrip.map(p => L.latLng(p.latitude, p.longitude))
+        ];
+
+        // If the control already exists, update the waypoints
+        if (routingControlRef.current) {
+            routingControlRef.current.setWaypoints(waypoints);
+        } else {
+            // Otherwise, create the control
+            routingControlRef.current = L.Routing.control({
+                waypoints: waypoints,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1'
+                }),
+                lineOptions: {
+                    styles: [{ color: '#ef4444', weight: 5, opacity: 0.8 }] 
+                },
+                createMarker: () => null, // Prevents default routing markers
+                addWaypoints: false,
+                routeWhileDragging: false,
+                show: false, // Hides the instruction panel (the "mask")
+                units: 'metric'
+            }).addTo(mapRef.current);
+        }
+    }
+};
 
             const filteredPlaces = useMemo(() => {
                 let list = editingRouteId ? selectedTrip : places;
@@ -790,7 +781,16 @@ const fetchRouteWeather = async (waypoints) => {
                                 {!editingRouteId && (
                                     <button onClick={handleSaveRoute} className="bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">Save</button>
                                 )}
-                                <button onClick={()=>{setSelectedTrip([]); setEditingRouteId(null);}} className="text-[10px] font-black uppercase text-red-500 border border-red-100 px-3 py-2 rounded-xl">Clear</button>
+                                <button 
+    onClick={() => {
+        setSelectedTrip([]); 
+        setEditingRouteId(null); 
+        setWeatherData({});
+    }} 
+    className="text-[10px] font-black uppercase text-red-500 border border-red-100 px-3 py-2 rounded-xl"
+>
+    Clear
+</button>
                                 <button onClick={handleStartRoute} className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">Start</button>
                             </div>                                                    
                         )}
@@ -823,12 +823,18 @@ const fetchRouteWeather = async (waypoints) => {
                             {/* Map Wrapper - Map Tab Only on Mobile */}
                             <div className={`map-wrapper shadow-xl border-4 border-white rounded-[1.5rem] flex-grow ${activeTab !== 'map' ? 'hidden lg:flex' : ''}`}>
                                 <div id="map-container">
+                                
+                                {/* Map Legend
+                                
                                     <div className="map-legend">
                                         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Pending</div>
                                         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Visited</div>
                                         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div> Planned (Locked)</div>
                                         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div> Smart Choice</div>
                                     </div>
+                                    
+                                    */}
+                                    
                                 </div>
                             </div>
 
