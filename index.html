@@ -103,6 +103,15 @@
             z-index: 20; background: rgba(255, 255, 255, 0.2);
             backdrop-blur: 2px; display: flex; align-items: center; justify-content: center;
         }
+        
+        .pac-container {
+    z-index: 10000 !important; /* Forces Google dropdown to the top */
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    border: none;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
     </style>
 </head>
 <body>
@@ -121,7 +130,7 @@
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
-        const EKALA = { lat: 7.0777, lng: 79.8924 };
+        const EKALA = { lat: 7.0911, lng: 79.9161 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
 
         function App() {
@@ -139,7 +148,6 @@
             const [toastMsg, setToastMsg] = useState('Updated');
             const [newLocationCategory, setNewLocationCategory] = useState('Location');
             const [tempLocation, setTempLocation] = useState(null);
-            
             const mapRef = useRef(null);
             const markersLayer = useRef(L.layerGroup());
             const hoverLayer = useRef(L.layerGroup());
@@ -150,12 +158,16 @@
             const [interactionStats, setInteractionStats] = useState({ likes: [], comments: [] });
             const [pendingComments, setPendingComments] = useState([]); 
             const [weatherData, setWeatherData] = useState({});
-            
             const currentRouteIdsRef = useRef("");
+            const [pendingItems, setPendingItems] = React.useState([]);
+            
             
             
             useEffect(() => {
+                fetchPlaces();
                 fetchAllAnalytics(); 
+                fetchPending();  
+                fetchPendingComments(); 
                 
                 const loadInitialData = async () => {
                     await Promise.all([fetchPlaces(), fetchSavedRoutes()]);
@@ -165,7 +177,7 @@
                 initGoogle();
                 const mapTimer = setTimeout(() => {
                     initMap();
-                    if (window.lucide) window.lucide.createIcons();
+                    if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50);
                 }, 300);
 
                 return () => clearTimeout(mapTimer);
@@ -173,7 +185,7 @@
 
             useEffect(() => {
                 updateMapElements();
-                if (window.lucide) window.lucide.createIcons();
+                if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50);
             }, [places, selectedTrip, filterTag, filterStatus, searchTerm, sortBy, hoveredPlaceId, activeTab]);
 
             const fetchAllAnalytics = async () => {
@@ -246,7 +258,7 @@
         });
 
         // Force Lucide to scan for new icons in the comment list
-        setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 100);
+        setTimeout(() => {if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50); }, 100);
 
     } catch (err) {
         console.error("Analytics Audit Failed:", err);
@@ -272,6 +284,44 @@
             const smartChoiceIds = useMemo(() => {
                 return [...places].filter(p => p.status === 'pending').sort((a, b) => parseFloat(a.distance_km) - parseFloat(b.distance_km)).slice(0, 3).map(p => p.id);
             }, [places]);
+            
+       const calculateDistance = (lat, lon) => {
+       const EKALA = { lat: 7.0911, lng: 79.9161 };
+       const R = 6371; // Earth's radius in km
+       const dLat = (lat - EKALA.lat) * (Math.PI / 180);
+       const dLon = (lon - EKALA.lng) * (Math.PI / 180);
+      const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(EKALA.lat * (Math.PI / 180)) * Math.cos(lat * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return parseFloat((R * c).toFixed(2)); // Result in KM
+};
+
+const fetchPending = async () => {
+    try {
+        const { data, error } = await supabaseClient
+            .from('pending_approvals')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setPendingItems(data || []);
+    } catch (err) {
+        console.error("Error fetching pending items:", err.message);
+    }
+};
+
+const fetchPendingComments = async () => {
+    try {
+        const { data, error } = await supabaseClient
+            .from('location_comments')
+            .select('*, travel_bucket_list(place_name)')
+            .order('created_at', { ascending: false });
+        if (!error) setPendingComments(data || []);
+    } catch (err) {
+        console.error(err);
+    }
+};
 
             const progress = useMemo(() => {
                 if (places.length === 0) return 0;
@@ -372,6 +422,55 @@
                     alert("Failed to add location. Check console for details.");
                 }
             };
+            
+           const handleApproveLocation = async (suggestion) => {
+    try {
+        // Use the helper function here
+        const dist = calculateDistance(suggestion.latitude, suggestion.longitude);
+
+        const { error: insertError } = await supabaseClient
+            .from('travel_bucket_list')
+            .insert([{
+                place_name: suggestion.place_name,
+                locality: suggestion.district,
+                latitude: suggestion.latitude,
+                longitude: suggestion.longitude,
+                google_maps_url: suggestion.map_url,
+                category: suggestion.category,
+                distance_km: dist 
+            }]);
+
+        if (insertError) throw insertError;
+
+        // Delete from pending after successful move
+        await supabaseClient.from('pending_approvals').delete().eq('id', suggestion.id);
+        
+        triggerToast("Location Approved & Published");
+        fetchPending();
+        fetchPlaces();
+    } catch (err) {
+        alert("Audit Failure: " + err.message);
+    }
+};
+
+const handleReject = async (id) => {
+    if (!confirm("Audit Action: Are you sure you want to reject and delete this suggestion?")) return;
+    
+    try {
+        const { error } = await supabaseClient
+            .from('pending_approvals')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        
+        triggerToast("Suggestion Rejected");
+        fetchPending(); // Refresh the list
+    } catch (err) {
+        console.error("Rejection Error:", err.message);
+        alert("Failed to delete: " + err.message);
+    }
+};
 
             const handleSaveRoute = async () => {
                 if (selectedTrip.length <= 1) return alert("Select at least 2 locations to save a route.");
@@ -573,9 +672,8 @@ const fetchRouteWeather = async (waypoints) => {
             console.error("Weather fetch failed for", wp.place_name, error);
         }
     }
-    setWeatherData(newWeatherData);
+    setWeatherData(prev => ({ ...prev, ...newWeatherData }));
 };
-
 
 
             const handleStartRoute = () => {
@@ -637,7 +735,7 @@ const fetchRouteWeather = async (waypoints) => {
 
     const updateMapElements = () => {
     if (!mapRef.current) return;
-
+       setTimeout(() => mapRef.current.invalidateSize(), 100);
     // 1. Clear standard marker layers
     markersLayer.current.clearLayers();
     hoverLayer.current.clearLayers();
@@ -894,11 +992,15 @@ const fetchRouteWeather = async (waypoints) => {
                                         </p>
                                     </div>
                                     <button 
-                                        onClick={fetchAllAnalytics} 
-                                        className="p-2 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all active:scale-95"
-                                    >
-                                        <i data-lucide="refresh-cw" className="w-4 h-4 text-blue-400"></i>
-                                    </button>
+    onClick={async () => {
+        // Optional: you could add a local loading state here to spin the icon
+        await Promise.all([fetchAllAnalytics(), fetchPending()]);
+        triggerToast("Dashboard Updated");
+    }} 
+    className="p-2 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all active:scale-95 group"
+>
+    <i data-lucide="refresh-cw" className="w-4 h-4 text-blue-400 group-active:rotate-180 transition-transform duration-500"></i>
+</button>
                                 </div>
 
                                 {/* Section 1: Traffic Sources */}
@@ -1001,7 +1103,7 @@ const fetchRouteWeather = async (waypoints) => {
                 alert(`Database Error: ${error.message}\nCheck if RLS policies allow 'UPDATE' for anon users.`);
             } else if (data && data.length > 0) {
                 triggerToast("Reply saved to database!");
-                await fetchAllAnalytics(); // Refresh the list to show the reply
+                await fetchAllAnalytics(); 
             } else {
                 console.warn("Update successful but 0 rows affected. Check if the ID matches.");
                 alert("No changes made. The comment ID might be incorrect.");
@@ -1018,12 +1120,78 @@ const fetchRouteWeather = async (waypoints) => {
         ) : (
             <span className="text-[7px] text-slate-600 italic">No comments to display</span>
         )}
+        
+        
+       </div>
+      </div>      
+     </div>     
+    </div>
+    
+    {/* BACK-END AUDIT UI BLOCK */}
+<div className="bg-white rounded-[32px] p-8 shadow-2xl border border-slate-100">
+    <div className="flex items-center justify-between mb-8">
+        <div>
+            <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">
+                Suggestions
+            </h2>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
+                Verify & Approve Suggestions
+            </p>
+        </div>
+        <div className="px-4 py-2 bg-amber-50 rounded-full border border-amber-100">
+            <span className="text-[10px] font-black text-amber-600 uppercase">
+                {pendingItems.length} Waiting
+            </span>
+        </div>
+    </div>
+
+    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+        {pendingItems.map((item) => (
+            <div key={item.id} className="flex items-center justify-between p-5 border border-slate-100 rounded-3xl bg-slate-50/50 hover:bg-white hover:shadow-xl transition-all border-l-4 border-l-indigo-500">
+            
+                <div className="flex gap-4 items-center">                    
+                    <div>
+                        <h4 className="font-black text-slate-900 text-sm leading-tight">
+                            {item.place_name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">
+                                {item.category}
+                            </span>
+                            <span className="text-slate-300 text-[9px]">•</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                {item.district}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                
+                    <button onClick={() => handleApproveLocation(item)}
+                        className="w-11 h-11 flex items-center justify-center text-slate-400 hover:text-green-500 hover:bg-green-50 rounded-2xl transition-all">
+        <i data-lucide="check" className="w-5 h-5"></i>
+                   </button>
+                    <button 
+                        onClick={() => handleReject(item.id)}
+                        className="w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all">
+                        <i data-lucide="trash-2" className="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        ))}
+
+        {pendingItems.length === 0 && (
+            <div className="py-24 text-center border-2 border-dashed border-slate-100 rounded-[32px]">
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">
+                    No Pending Approvals
+                </p>
+            </div>
+        )}
     </div>
 </div>
-                                    
-                                    
-                                </div>
-                            </div>
+                            
+                            
                  
                             <div className="sticky top-0 z-[100] bg-white/95 backdrop-blur rounded-[1.5rem] border p-4 space-y-3 shadow-sm mb-4">
                                 <div className="flex items-center justify-between">
@@ -1182,9 +1350,7 @@ const fetchRouteWeather = async (waypoints) => {
         </div>
     );
 })}
-                                
-                                
-                            </div>
+            </div>
                         </div>
                     </main>
 
