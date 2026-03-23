@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Journal - Advanced Trip Planner</title>
+    <title>My Journal - Advanced Console</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -11,108 +11,103 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@0.473.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        
-        /* FIX: Hides the Routing Instruction Legend/Mask */
-        .leaflet-routing-container { display: none !important; }
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    
+    /* --- Core Layout --- */
+    body { 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+        background-color: #F8FAFC; 
+        margin: 0; 
+        padding: 0; 
+        overflow: hidden; 
+        height: 100vh; 
+    }
+    
+    #map-container { 
+        width: 100%; 
+        height: 100%; 
+        z-index: 0; 
+        background: #e2e8f0; 
+    }
 
-        /* General Reset & Layout Lock */
-        body { 
-            font-family: 'Plus Jakarta Sans', sans-serif; 
-            background-color: #F8FAFC; 
-            margin: 0; padding: 0; overflow: hidden;
-            height: 100vh; width: 100vw;
-        }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    
+    /* --- Search & UI Components --- */
+    .pac-container { 
+        z-index: 10000 !important; 
+        border-radius: 1.5rem; 
+        border: none; 
+        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); 
+        padding: 0.5rem; 
+        margin-top: 5px; 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+    }
 
-        /* Desktop Grid Fixes */
-        @media (min-width: 1024px) { 
-            .main-grid { 
-                display: grid; 
-                grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); 
-                height: calc(100vh - 80px); 
-                padding: 1rem; gap: 2%; 
-                width: 100%; box-sizing: border-box; overflow: hidden;
-            } 
-            .scroll-column { 
-                overflow-y: auto; overflow-x: hidden; height: 100%; 
-                padding-right: 8px; min-width: 0; display: flex;
-                flex-direction: column; scrollbar-gutter: stable;
-            }
-            .map-wrapper { 
-                flex-grow: 1; min-height: 350px; display: flex; 
-                flex-direction: column; margin-bottom: 0 !important;
-            }
-            #map-container { flex-grow: 1; height: 100% !important; }
-        }
+    /* --- Leaflet & Routing Appearance --- */
+    .leaflet-routing-container { display: none !important; } 
+    
+    .leaflet-interactive {
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
 
-        /* Mobile Adjustments */
-        @media (max-width: 1023px) {
-            .main-grid { 
-                display: flex; flex-direction: column; 
-                height: calc(100vh - 130px); padding: 0.75rem; 
-                width: 100%; box-sizing: border-box; overflow: hidden;
-            }
-            .mobile-hidden { display: none !important; }
-            .mobile-map-view { height: 100%; display: flex; flex-direction: column; gap: 1rem; }
-            .mobile-list-view { height: 100%; overflow-y: auto; }
-            #map-container { height: 55vh !important; flex-shrink: 0; }
-        }
+    /* --- Custom Markers --- */
+    .marker-pending { 
+        background: #f97316; 
+        border: 2px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3); 
+    }
 
-        /* Universal Custom Scrollbar */
-        .scroll-column::-webkit-scrollbar,
-        .scrollable-list::-webkit-scrollbar { width: 6px; }
-        .scroll-column::-webkit-scrollbar-thumb,
-        .scrollable-list::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
-        .scroll-column::-webkit-scrollbar-track,
-        .scrollable-list::-webkit-scrollbar-track { background: transparent; }
-        
-        /* Marker Styles */
-        .marker-pending { background-color: #f97316; border: 2px solid white; border-radius: 50%; }
-        .marker-done { background-color: #10b981; border: 2px solid white; border-radius: 50%; }
-        .marker-locked { background-color: #a855f7; border: 2px solid white; border-radius: 50%; }
-        .marker-selected { background-color: #ef4444; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; }
-        
-        .marker-hover { 
-            background-color: #facc15; border: 3px solid white; border-radius: 50%; 
-            box-shadow: 0 0 20px rgba(250, 204, 21, 1); z-index: 9999 !important; 
-        }
+    .marker-done { 
+        background: #10b981; 
+        border: 2px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3); 
+    }
 
-        @keyframes smart-pulse { 
-            0% { box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.7); } 
-            100% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 
-        }
-        .marker-smart { background-color: #3b82f6; border: 2px solid white; border-radius: 50%; animation: smart-pulse 2s infinite; }
+    .marker-selected { 
+        background: #a855f7; 
+        border: 2px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.3); 
+        z-index: 1000 !important; 
+    }
 
-        .location-tooltip {
-            background: rgba(15, 23, 42, 0.9); border: none; border-radius: 4px;
-            color: white; font-size: 8px; font-weight: 800; padding: 2px 6px; text-transform: uppercase;
-        }
+    .marker-smart { 
+        background: #3b82f6; 
+        border: 2px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3); 
+    }
 
-        .location-card { position: relative; overflow: hidden; }
-        .location-card:hover { border-color: #CBD5E1; transform: translateY(-2px); }
-        
-        .locked-overlay {
-            position: absolute; top: 0; left: 0; right: 0; height: 128px;
-            z-index: 20; background: rgba(255, 255, 255, 0.2);
-            backdrop-blur: 2px; display: flex; align-items: center; justify-content: center;
-        }
-        
-        .pac-container {
-    z-index: 10000 !important; /* Forces Google dropdown to the top */
-    border-radius: 1rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    border: none;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-}
+    /* --- Popup / Tooltip Styling --- */
+    .leaflet-popup-content-wrapper {
+        padding: 0 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        overflow: hidden;
+    }
 
-    </style>
+    .leaflet-popup-content {
+        margin: 8px !important;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .leaflet-popup-tip-container {
+        display: none !important; 
+    }
+</style>    
+
+
 </head>
 <body>
     <div id="root"></div>
@@ -128,1234 +123,1158 @@
 
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
         const EKALA = { lat: 7.0911, lng: 79.9161 };
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);        
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
+        
+        let globalRoutingControl = null;
 
         function App() {
-            const [places, setPlaces] = useState([]);
-            const [savedRoutes, setSavedRoutes] = useState([]);
-            const [searchTerm, setSearchTerm] = useState('');
-            const [filterTag, setFilterTag] = useState('All');
-            const [filterStatus, setFilterStatus] = useState('Pending');
-            const [sortBy, setSortBy] = useState('newest');
-            const [selectedTrip, setSelectedTrip] = useState([]);
-            const [editingRouteId, setEditingRouteId] = useState(null);
-            const [hoveredPlaceId, setHoveredPlaceId] = useState(null);
-            const [activeTab, setActiveTab] = useState('map');
-            const [showToast, setShowToast] = useState(false);
-            const [toastMsg, setToastMsg] = useState('Updated');
-            const [newLocationCategory, setNewLocationCategory] = useState('Location');
-            const [tempLocation, setTempLocation] = useState(null);
-            const mapRef = useRef(null);
-            const markersLayer = useRef(L.layerGroup());
-            const hoverLayer = useRef(L.layerGroup());
-            const polylineRef = useRef(null);
-            const routingControlRef = useRef(null);
-            const autocompleteRef = useRef(null);            
-            const [analytics, setAnalytics] = useState({ total: 0, pathStats: [] });
-            const [interactionStats, setInteractionStats] = useState({ likes: [], comments: [] });
-            const [pendingComments, setPendingComments] = useState([]); 
-            const [weatherData, setWeatherData] = useState({});
-            const currentRouteIdsRef = useRef("");
-            const [pendingItems, setPendingItems] = React.useState([]);
-            
-            
-            
-            useEffect(() => {
-                fetchPlaces();
-                fetchAllAnalytics(); 
-                fetchPending();  
-                fetchPendingComments(); 
-                
-                const loadInitialData = async () => {
-                    await Promise.all([fetchPlaces(), fetchSavedRoutes()]);
-                };
-                loadInitialData();
+            // --- Core Data States ---
+const [places, setPlaces] = useState([]);
+const [visiblePlaces, setVisiblePlaces] = useState([]);
+const [filteredPlaces, setFilteredPlaces] = useState([]);
+const [userCoords, setUserCoords] = useState(null);
+const [savedRoutes, setSavedRoutes] = useState([]);
+const [pendingApprovals, setPendingApprovals] = useState([]);
+const [analyticsData, setAnalyticsData] = useState([]); 
+const [allComments, setAllComments] = useState([]);
+const [likesData, setLikesData] = useState([]);
 
-                initGoogle();
-                const mapTimer = setTimeout(() => {
-                    initMap();
-                    if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50);
-                }, 300);
+// --- UI & Interaction States ---
+const [activeTab, setActiveTab] = useState('places');
+const [selectedTrip, setSelectedTrip] = useState([]);
+const [searchTerm, setSearchTerm] = useState('');
+const [filterCategory, setFilterCategory] = useState('All');
+const [filterStatus, setFilterStatus] = useState('All');
+const [sortBy, setSortBy] = useState('newest');
+const [toast, setToast] = useState({ show: false, msg: '' });
 
-                return () => clearTimeout(mapTimer);
-            }, []);
+// --- Add Location Flow State ---
+const [stagedLocation, setStagedLocation] = useState(null);
+
+// --- Refs ---
+const mapRef = useRef(null);
+const lastRoutePoints = useRef("");
+const markersLayer = useRef(L.layerGroup());
+const routingControl = useRef(null);
+const autocompleteRef = useRef(null);
+            
+        React.useEffect(() => {
+    if (navigator.geolocation) {
+        const watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                setUserCoords({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                });
+            },
+            (error) => console.error("GPS Error:", error),
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+        return () => navigator.geolocation.clearWatch(watchId);
+    }
+}, []);
 
             useEffect(() => {
-                updateMapElements();
-                if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50);
-            }, [places, selectedTrip, filterTag, filterStatus, searchTerm, sortBy, hoveredPlaceId, activeTab]);
+    refreshAllData();
+    initGoogle();
+    refreshIcons(); // Add this
+}, []);
 
-            const fetchAllAnalytics = async () => {
-    try {
-        const { data: visits } = await supabaseClient.from('page_visits').select('*');
-        const { data: likes } = await supabaseClient.from('location_likes').select('country, city');
-        const { data: comments } = await supabaseClient.from('location_comments').select('country, city');
+React.useEffect(() => {
+    setVisiblePlaces(places);
+}, [places]);
 
-        // Fetch latest comments with ID and join data
-        const { data: latestComments, error: commentError } = await supabaseClient
-            .from('location_comments')
-            .select('*, travel_bucket_list (place_name)')
-            .order('created_at', { ascending: false })
-            .limit(10);
-
-        if (commentError) console.error("Error fetching comments:", commentError);
-        
-        // Update states
-        setPendingComments(latestComments || []);
-        
-        const processStats = (data, isVisit = false) => {
-    if (!data) return [];
-
-    const getDeviceType = (ua) => {
-    if (!ua) return "Unknown";
-    
-    // Check for Android first
-    if (ua.includes("Android")) {
-        // If it contains 'wv', it's an in-app browser on Android
-        return ua.includes("; wv") ? "Android (In-App)" : "Android Mobile";
-    }
-    
-    // Check for iPhone
-    if (ua.includes("iPhone")) {
-        // iPhone in-app browsers often contain 'FBAN' (Facebook) or 'Instagram'
-        return (ua.includes("FBAN") || ua.includes("FBIOS")) ? "iPhone (In-App)" : "iPhone";
-    }
-    
-    // Desktop checks
-    if (ua.includes("Windows NT")) return "Windows PC";
-    if (ua.includes("Macintosh")) return "Mac PC";
-    if (ua.includes("Linux") && !ua.includes("Android")) return "Linux PC";
-    
-    return "Other Device";
-};
-
-    const statsMap = data.reduce((acc, item) => {
-        let label;
-        if (isVisit) {
-            const device = getDeviceType(item.user_agent);
-            const location = [item.city, item.country].filter(Boolean).join(', ') || "Unknown Location";
-            label = `${device} — ${location}`;
-        } else {
-            label = `${item.city || 'Unknown'}, ${item.country || 'Unknown'}`;
-        }
-
-        acc[label] = (acc[label] || 0) + 1;
-        return acc;
-    }, {});
-
-    return Object.entries(statsMap)
-        .map(([path, count]) => ({ path, count }))
-        .sort((a, b) => b.count - a.count);
-};
-
-        setAnalytics({ total: visits?.length || 0, pathStats: processStats(visits, true) });
-        setInteractionStats({
-            likes: processStats(likes),
-            comments: processStats(comments)
-        });
-
-        // Force Lucide to scan for new icons in the comment list
-        setTimeout(() => {if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50); }, 100);
-
-    } catch (err) {
-        console.error("Analytics Audit Failed:", err);
-    }
-};
-
-            const lockedLocationIds = useMemo(() => {
-                const ids = new Set();
-                savedRoutes.forEach(route => { route.waypoints.forEach(wp => ids.add(wp.id)); });
-                return ids;
-            }, [savedRoutes]);
-
-            const fetchPlaces = async () => {
-                const { data } = await supabaseClient.from('travel_bucket_list').select('*');
-                setPlaces(data || []);
-            };
-
-            const fetchSavedRoutes = async () => {
-                const { data } = await supabaseClient.from('saved_travel_routes').select('*').order('created_at', { ascending: false });
-                setSavedRoutes(data || []);
-            };
-
-            const smartChoiceIds = useMemo(() => {
-                return [...places].filter(p => p.status === 'pending').sort((a, b) => parseFloat(a.distance_km) - parseFloat(b.distance_km)).slice(0, 3).map(p => p.id);
-            }, [places]);
-            
-       const calculateDistance = (lat, lon) => {
-       const EKALA = { lat: 7.0911, lng: 79.9161 };
-       const R = 6371; // Earth's radius in km
-       const dLat = (lat - EKALA.lat) * (Math.PI / 180);
-       const dLon = (lon - EKALA.lng) * (Math.PI / 180);
-      const a = 
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(EKALA.lat * (Math.PI / 180)) * Math.cos(lat * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return parseFloat((R * c).toFixed(2)); // Result in KM
-};
-
-const fetchPending = async () => {
-    try {
-        const { data, error } = await supabaseClient
-            .from('pending_approvals')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setPendingItems(data || []);
-    } catch (err) {
-        console.error("Error fetching pending items:", err.message);
-    }
-};
-
-const fetchPendingComments = async () => {
-    try {
-        const { data, error } = await supabaseClient
-            .from('location_comments')
-            .select('*, travel_bucket_list(place_name)')
-            .order('created_at', { ascending: false });
-        if (!error) setPendingComments(data || []);
-    } catch (err) {
-        console.error(err);
-    }
-};
-
-            const progress = useMemo(() => {
-                if (places.length === 0) return 0;
-                return Math.round((places.filter(p => p.status === 'done').length / places.length) * 100);
-            }, [places]);
-
-            const initMap = () => {
-                if (mapRef.current) return;
-                mapRef.current = L.map('map-container', { zoomControl: false, attributionControl: false }).setView([EKALA.lat, EKALA.lng], 8);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapRef.current);
-                markersLayer.current.addTo(mapRef.current);
-                hoverLayer.current.addTo(mapRef.current);
-            };
-
-            const initGoogle = async () => {
-            
-    const { Autocomplete } = await google.maps.importLibrary("places");
-    if (!autocompleteRef.current) return;
-    
-    const autocomplete = new Autocomplete(autocompleteRef.current, { 
-        componentRestrictions: { country: "lk" },
-        // Explicitly request address components
-        fields: ["address_components", "geometry", "name"] 
-    });
-
-    autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        if (place.geometry) {
-            // Robust locality extraction
-            const components = place.address_components || [];
-            const getComponent = (types) => 
-                components.find(c => types.some(t => c.types.includes(t)))?.long_name;
-
-            // Try Locality -> Sublocality -> District
-            const areaName = getComponent(["locality"]) || 
-                             getComponent(["sublocality_level_1"]) || 
-                             getComponent(["administrative_area_level_2"]) || 
-                             "Unknown Area";
-
-            setTempLocation({
-                name: place.name, 
-                lat: place.geometry.location.lat(), 
-                lng: place.geometry.location.lng(),
-                area: areaName
-            });
-        }
-    });
-};
-            
-            const handleManualArticle = async (record) => {
-                const existingArticle = record.ai_article || "";
-                const newArticle = prompt(`Draft article for ${record.place_name}:`, existingArticle);
+React.useEffect(() => {
+    setFilteredPlaces(places);
+}, [places]);
                 
-                if (newArticle === null) return;
+                const refreshIcons = () => {
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 100);
+};
+            
+            
 
-                const { error } = await supabaseClient.from('travel_bucket_list').update({ ai_article: newArticle }).eq('id', record.id);
-
-                if (!error) {
-                    fetchPlaces();
-                    triggerToast("Article saved successfully!");
-                } else {
-                    triggerToast("Error saving article");
-                }
-            };
+            // Handle Tab Switching specifically for Map Initialization
+            useEffect(() => {
+    if (activeTab === 'map') {
+        setTimeout(() => {
+            initMap();
+            if (mapRef.current) mapRef.current.invalidateSize();
+            updateMapMarkers();
+        }, 200);
+    }
+    refreshIcons(); // Refresh icons every time the tab or data changes
+}, [activeTab, places, selectedTrip]);
 
             const triggerToast = (msg) => {
-                setToastMsg(msg); setShowToast(true);
-                setTimeout(() => setShowToast(false), 3000);
+                setToast({ show: true, msg });
+                setTimeout(() => setToast({ show: false, msg: '' }), 2500);
             };
 
-            const handleAddLocation = async () => {
-                if (!tempLocation) return alert("Select a location first");
-                
-                const isDuplicate = places.some(p => p.place_name.toLowerCase() === tempLocation.name.toLowerCase());
-                if (isDuplicate) return alert("This location is already in your bucket list!");
+            const refreshAllData = async () => {
+    const [p, sr, v, a, c, l] = await Promise.all([
+        supabaseClient.from('travel_bucket_list').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('saved_travel_routes').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('page_visits').select('*'), // Fetch raw visits
+        supabaseClient.from('pending_approvals').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('location_comments').select('*, travel_bucket_list(place_name)').order('created_at', { ascending: false }), // Fetch ALL comments
+        supabaseClient.from('location_likes').select('*, travel_bucket_list(place_name)')
+    ]);
 
-                const dist = (L.latLng(EKALA.lat, EKALA.lng).distanceTo(L.latLng(tempLocation.lat, tempLocation.lng)) / 1000).toFixed(1);
-                
-                const google_maps_url = `https://www.google.com/maps/search/?api=1&query=${tempLocation.lat},${tempLocation.lng}`;
+    setPlaces(p.data || []);
+    setSavedRoutes(sr.data || []);
+    setAnalyticsData(v.data || []);
+    setPendingApprovals(a.data || []);
+    setAllComments(c.data || []);
+    setLikesData(l.data || []);
+};
 
-                const { error } = await supabaseClient.from('travel_bucket_list').insert([{
-                    place_name: tempLocation.name, 
-                    latitude: parseFloat(tempLocation.lat), 
-                    longitude: parseFloat(tempLocation.lng),
-                    category: newLocationCategory, 
-                    distance_km: parseFloat(dist), 
-                    status: "pending", 
-                    locality: tempLocation.area,
-                    google_maps_url: google_maps_url 
-                }]);
 
-                if (!error) { 
-                    fetchPlaces(); 
-                    setTempLocation(null); 
-                    if (autocompleteRef.current) autocompleteRef.current.value = ""; 
-                    triggerToast('Location Added'); 
-                } else {
-                    alert("Failed to add location. Check console for details.");
-                }
+
+            // --- HEADER: ADD LOCATION FUNCTIONS ---
+            const initGoogle = async () => {
+                const { Autocomplete } = await google.maps.importLibrary("places");
+                if (!autocompleteRef.current) return;
+                const autocomplete = new Autocomplete(autocompleteRef.current, { componentRestrictions: { country: "lk" } });
+                autocomplete.addListener("place_changed", () => {
+                    const place = autocomplete.getPlace();
+                    if (!place.geometry) return;
+                    setStagedLocation({
+                        place_name: place.name,
+                        latitude: place.geometry.location.lat(),
+                        longitude: place.geometry.location.lng(),
+                        locality: place.address_components?.[0]?.long_name || "Unknown Area",
+                        google_maps_url: place.url,
+                        category: 'Location' // Default
+                    });
+                });
             };
-            
-           const handleApproveLocation = async (suggestion) => {
-    try {
-        // Use the helper function here
-        const dist = calculateDistance(suggestion.latitude, suggestion.longitude);
 
-        const { error: insertError } = await supabaseClient
-            .from('travel_bucket_list')
-            .insert([{
-                place_name: suggestion.place_name,
-                locality: suggestion.district,
-                latitude: suggestion.latitude,
-                longitude: suggestion.longitude,
-                google_maps_url: suggestion.map_url,
-                category: suggestion.category,
-                distance_km: dist 
-            }]);
+            const saveStagedLocation = async () => {
+    if (!stagedLocation) return;
 
-        if (insertError) throw insertError;
+    // Use live user coordinates if available; otherwise, fall back to EKALA
+    const referencePoint = userCoords || EKALA;
 
-        // Delete from pending after successful move
-        await supabaseClient.from('pending_approvals').delete().eq('id', suggestion.id);
-        
-        triggerToast("Location Approved & Published");
-        fetchPending();
-        fetchPlaces();
-    } catch (err) {
-        alert("Audit Failure: " + err.message);
+    // Calculate distance in KM based on the reference point
+    const dist = (L.latLng(referencePoint.lat, referencePoint.lng)
+        .distanceTo(L.latLng(stagedLocation.latitude, stagedLocation.longitude)) / 1000)
+        .toFixed(1);
+
+    const { error } = await supabaseClient.from('travel_bucket_list').insert([{
+        ...stagedLocation,
+        status: 'pending',
+        distance_km: dist
+    }]);
+    
+    if (!error) {
+        triggerToast('Location Saved Successfully');
+        setStagedLocation(null);
+        if (autocompleteRef.current) autocompleteRef.current.value = '';
+        refreshAllData();
+    } else {
+        triggerToast('Error Saving Location');
+        console.error("Supabase Error:", error);
     }
 };
 
-const handleReject = async (id) => {
-    if (!confirm("Audit Action: Are you sure you want to reject and delete this suggestion?")) return;
-    
-    try {
+            // --- TAB 1: PLACES FUNCTIONS ---
+            const updatePlaceField = async (id, field, value) => {
+                const { error } = await supabaseClient.from('travel_bucket_list').update({ [field]: value }).eq('id', id);
+                if (!error) { triggerToast('Updated Successfully'); refreshAllData(); }
+            };
+
+            const promptForValue = (id, field, currentVal, title) => {
+                const val = prompt(`Enter ${title}:`, currentVal || '');
+                if (val !== null) updatePlaceField(id, field, val);
+            };
+
+            const processedPlaces = useMemo(() => {
+                return places.filter(p => {
+                    const matchSearch = p.place_name.toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchCat = filterCategory === 'All' || p.category === filterCategory;
+                    const matchStat = filterStatus === 'All' || p.status === filterStatus;
+                    return matchSearch && matchCat && matchStat;
+                }).sort((a,b) => {
+                    if (sortBy === 'distance') return parseFloat(a.distance_km) - parseFloat(b.distance_km);
+                    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+                });
+            }, [places, searchTerm, filterCategory, filterStatus, sortBy]);
+            
+            const deleteLocation = async (id, name) => {
+    if (confirm(`Are you sure you want to delete "${name}"?`)) {
         const { error } = await supabaseClient
-            .from('pending_approvals')
+            .from('travel_bucket_list')
             .delete()
             .eq('id', id);
-
-        if (error) throw error;
         
-        triggerToast("Suggestion Rejected");
-        fetchPending(); // Refresh the list
-    } catch (err) {
-        console.error("Rejection Error:", err.message);
-        alert("Failed to delete: " + err.message);
-    }
-};
-
-            const handleSaveRoute = async () => {
-                if (selectedTrip.length <= 1) return alert("Select at least 2 locations to save a route.");
-                const routeName = prompt("Enter a name for this route plan:");
-                if (!routeName) return;
-                const isNameDuplicate = savedRoutes.some(r => r.route_name.toLowerCase() === routeName.toLowerCase());
-                if (isNameDuplicate) return alert("A route plan with this name already exists!");
-
-                const { error } = await supabaseClient.from('saved_travel_routes').insert([{ route_name: routeName, waypoints: selectedTrip }]);
-                if (!error) { fetchSavedRoutes(); triggerToast('Route Saved'); }
-            };
-            
-            const getAreaFromCoords = (lat, lng) => {
-    return new Promise((resolve) => {
-        const geocoder = new google.maps.Geocoder();
-        const latlng = { lat: parseFloat(lat), lng: parseFloat(lng) };
-
-        geocoder.geocode({ location: latlng }, (results, status) => {
-            if (status === "OK" && results[0]) {
-                const components = results[0].address_components;
-                const getComponent = (types) => 
-                    components.find(c => types.some(t => c.types.includes(t)))?.long_name;
-
-                const area = getComponent(["locality"]) || 
-                             getComponent(["sublocality_level_1"]) || 
-                             getComponent(["administrative_area_level_2"]) || 
-                             "Unknown Area";
-                resolve(area);
-            } else {
-                resolve("Unknown Area");
-            }
-        });
-    });
-};
-            
-    const repairLocality = async () => {
-    triggerToast("Scanning for missing locality data...");
-    
-    // 1. Fetch only records where locality is missing, null, or 'Unknown Area'
-    const { data: missingPlaces, error } = await supabaseClient
-        .from('travel_bucket_list')
-        .select('*')
-        .or('locality.is.null, locality.eq., locality.eq.Unknown Area');
-
-    if (error) {
-        console.error("Fetch error:", error);
-        return;
-    }
-
-    if (!missingPlaces || missingPlaces.length === 0) {
-        triggerToast("All localities are already filled.");
-        return;
-    }
-
-    const geocoder = new google.maps.Geocoder();
-
-    // 2. Process only the records needing repair
-    for (const place of missingPlaces) {
-        // We use Reverse Geocoding: Coordinate -> Address Components
-        const latLng = { lat: parseFloat(place.latitude), lng: parseFloat(place.longitude) };
-
-        geocoder.geocode({ location: latLng }, async (results, status) => {
-            if (status === "OK" && results[0]) {
-                const components = results[0].address_components;
-                
-                // 3. Extract Locality with fallback logic
-                const getComponent = (types) => 
-                    components.find(c => types.some(t => c.types.includes(t)))?.long_name;
-
-                // Priority: Specific Town -> Area/Suburb -> District (Nearest City)
-                const accurateLocality = getComponent(["locality"]) || 
-                                         getComponent(["sublocality_level_1"]) || 
-                                         getComponent(["administrative_area_level_2"]) || 
-                                         "Unknown Area";
-
-                // 4. Update only the locality field to protect other data
-                const { error: updateError } = await supabaseClient
-                    .from('travel_bucket_list')
-                    .update({ locality: accurateLocality })
-                    .eq('id', place.id);
-
-                if (updateError) {
-                    console.error(`Update failed for ${place.place_name}:`, updateError);
-                } else {
-                    console.log(`Repaired Locality for ${place.place_name}: ${accurateLocality}`);
-                }
-            } else {
-                console.warn(`Reverse geocode failed for ${place.place_name} at ${place.latitude},${place.longitude}: ${status}`);
-            }
-        });
-    }
-    
-    setTimeout(() => {
-        fetchPlaces(); 
-        triggerToast("Locality metadata sync complete");
-    }, 3000);
-};
-
-const exportArticlesAndClearDatabase = async () => {
-    // 1. Multi-Step Confirmation
-    const step1 = confirm("CRITICAL WARNING: This will download a backup of all AI articles and PERMANENTLY WIPE the following tables:\n- travel_bucket_list\n- saved_travel_routes\n- location_comments\n- location_likes");
-    if (!step1) return;
-    
-    const step2 = confirm("Are you absolutely sure? This action cannot be reversed.");
-    if (!step2) return;
-
-    try {
-        triggerToast("Generating Article Backup...");
-
-        // 2. Fetch data for backup before any deletions
-        const { data: allRecords, error: fetchError } = await supabaseClient
-            .from('travel_bucket_list')
-            .select('place_name, ai_article, locality');
-
-        if (fetchError) throw fetchError;
-
-        // 3. Build the text file content
-        let fileContent = `ADVENTURE JOURNAL FULL SYSTEM EXPORT\n`;
-        fileContent += `Export Date: ${new Date().toLocaleString()}\n`;
-        fileContent += `------------------------------------------\n\n`;
-
-        let articleCount = 0;
-        allRecords.forEach(record => {
-            if (record.ai_article) {
-                articleCount++;
-                fileContent += `📍 LOCATION: ${record.place_name}\n`;
-                fileContent += `🗺️ LOCALITY: ${record.locality || 'N/A'}\n`;
-                fileContent += `📝 ARTICLE:\n${record.ai_article}\n`;
-                fileContent += `\n==========================================\n\n`;
-            }
-        });
-
-        // 4. Trigger the Download
-        const blob = new Blob([fileContent], { type: 'text/plain' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Full_Journal_Backup_${new Date().toISOString().split('T')[0]}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        // 5. Purge All Tables
-        triggerToast(`Backup Saved (${articleCount} articles). Cleaning Database...`);
-        
-        const tablesToPurge = [
-            'location_comments',
-            'location_likes',
-            'saved_travel_routes',
-            'travel_bucket_list' // Deleted last to maintain potential foreign key integrity during purge
-        ];
-
-        for (const tableName of tablesToPurge) {
-            console.log(`Purging ${tableName}...`);
-            const { error: deleteError } = await supabaseClient
-                .from(tableName)
-                .delete()
-                .neq('id', '00000000-0000-0000-0000-000000000000'); // Standard UUID filter for purge
-
-            if (deleteError) {
-                console.error(`Error purging ${tableName}:`, deleteError);
-                throw new Error(`Failed to clear ${tableName}`);
-            }
-        }
-
-        triggerToast("All Tables Successfully Purged");
-        
-        // Refresh local state/UI
-        if (typeof fetchPlaces === 'function') fetchPlaces();
-        if (typeof fetchRoutes === 'function') fetchRoutes(); // If you have a separate route fetcher
-
-    } catch (err) {
-        console.error("Purge Error:", err);
-        triggerToast(`Purge Failed: ${err.message}`);
-    }
-};
-
-
-const fetchRouteWeather = async (waypoints) => {
-    const newWeatherData = {};
-    for (const wp of waypoints) {
-        try {
-            // Using the 5-day forecast to get both current (index 0) and next day (index 8)
-            const response = await fetch(
-                `https://api.openweathermap.org/data/2.5/forecast?lat=${wp.latitude}&lon=${wp.longitude}&units=metric&appid=${WEATHER_KEY}`
-            );
-            const data = await response.json();
-            
-            if (data.list) {
-                newWeatherData[wp.place_name] = {
-                    current: Math.round(data.list[0].main.temp),
-                    currentCond: data.list[0].weather[0].main,
-                    nextDay: Math.round(data.list[8].main.temp),
-                    nextCond: data.list[8].weather[0].main
-                };
-            }
-        } catch (error) {
-            console.error("Weather fetch failed for", wp.place_name, error);
-        }
-    }
-    setWeatherData(prev => ({ ...prev, ...newWeatherData }));
-};
-
-
-            const handleStartRoute = () => {
-                if (selectedTrip.length === 0) return;
-                const origin = `${EKALA.lat},${EKALA.lng}`;
-                const destination = `${selectedTrip[selectedTrip.length - 1].latitude},${selectedTrip[selectedTrip.length - 1].longitude}`;
-                const waypoints = selectedTrip.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
-                
-                window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`, '_blank');
-            };
-
-            const handleShareRoute = (route) => {
-                const origin = `${EKALA.lat},${EKALA.lng}`;
-                const destination = `${route.waypoints[route.waypoints.length - 1].latitude},${route.waypoints[route.waypoints.length - 1].longitude}`;
-                const waypoints = route.waypoints.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
-                
-                const mapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
-                const totalDist = route.waypoints.reduce((acc, curr) => acc + curr.distance_km, 0).toFixed(1);
-                const locationList = route.waypoints.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n');
-
-                const shareText = `📍 *${route.route_name}*\n\nTotal Distance: ${totalDist} KM\n\n*Stops:*\n${locationList}\n\n*View Journey Map:*\n${mapUrl}`;
-
-                if (navigator.share) {
-                    navigator.share({ title: route.route_name, text: shareText }).catch(console.error);
-                } else {
-                    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
-                }
-            };
-
-            const updateField = async (id, field, value) => {
-                const { error } = await supabaseClient.from('travel_bucket_list').update({ [field]: value }).eq('id', id);
-                
-                if (!error) {
-                    if (field === 'status' && value === 'done') {
-                        const routesToCleanup = savedRoutes.filter(route => route.waypoints.some(wp => wp.id === id));
-                        for (const route of routesToCleanup) {
-                            const updatedWaypoints = route.waypoints.filter(wp => wp.id !== id);
-                            if (updatedWaypoints.length < 2) {
-                                await supabaseClient.from('saved_travel_routes').delete().eq('id', route.id);
-                            } else {
-                                await supabaseClient.from('saved_travel_routes').update({ waypoints: updatedWaypoints }).eq('id', route.id);
-                            }
-                        }
-                        fetchSavedRoutes();
-                    }
-                    fetchPlaces(); 
-                    triggerToast(value === 'done' ? 'Visited & Unlocked' : 'Updated'); 
-                }
-            };
-
-            const handleEditName = async (record) => {
-                const newName = prompt(`Edit name for ${record.place_name}:`, record.place_name);
-                if (!newName || newName === record.place_name) return;
-
-                const { error } = await supabaseClient.from('travel_bucket_list').update({ place_name: newName }).eq('id', record.id);
-                if (!error) { fetchPlaces(); triggerToast("Name updated!"); } 
-                else { triggerToast("Error updating name"); }
-            };
-
-    const updateMapElements = () => {
-    if (!mapRef.current) return;
-       setTimeout(() => mapRef.current.invalidateSize(), 100);
-    // 1. Clear standard marker layers
-    markersLayer.current.clearLayers();
-    hoverLayer.current.clearLayers();
-
-    // 2. Clear old polyline if it exists
-    if (polylineRef.current) {
-        mapRef.current.removeLayer(polylineRef.current);
-        polylineRef.current = null;
-    }
-
-    // 3. Create a unique string for the current trip to check if it actually changed
-    const newRouteSignature = selectedTrip.map(p => p.id).join(',');
-
-    // Handle Routing Cleanup
-    if (selectedTrip.length === 0) {
-        if (routingControlRef.current) {
-            mapRef.current.removeControl(routingControlRef.current);
-            routingControlRef.current = null;
-        }
-        currentRouteIdsRef.current = ""; // Reset signature
-    }
-
-    // 4. Draw standard markers (Pending, Done, Locked)
-    places.forEach(p => {
-        const isSelected = selectedTrip.find(st => st.id === p.id);
-        if (isSelected) return; 
-        
-        let iconClass = p.status === 'done' ? 'marker-done' : (lockedLocationIds.has(p.id) ? 'marker-locked' : 'marker-pending');
-        if (smartChoiceIds.includes(p.id)) iconClass = 'marker-smart';
-        
-        L.marker([p.latitude, p.longitude], { 
-            icon: L.divIcon({ className: iconClass, iconSize: [12, 12] }) 
-        })
-        .bindTooltip(p.place_name, { permanent: false, direction: 'top', className: 'location-tooltip' })
-        .addTo(markersLayer.current);
-    });
-
-    // 5. Draw Selected Route Markers (Numbered)
-    selectedTrip.forEach((p, idx) => {
-        L.marker([p.latitude, p.longitude], { 
-            icon: L.divIcon({ className: 'marker-selected', html: `<span>${idx + 1}</span>`, iconSize: [24, 24] }), 
-            zIndexOffset: 2000 
-        })
-        .bindTooltip(p.place_name, { permanent: false, direction: 'top', className: 'location-tooltip' })
-        .addTo(markersLayer.current);
-    });
-
-    // 6. Draw Hover Marker
-    if (hoveredPlaceId) {
-        const hp = places.find(p => p.id === hoveredPlaceId);
-        if (hp) {
-            L.marker([hp.latitude, hp.longitude], { 
-                icon: L.divIcon({ className: 'marker-hover', iconSize: [24, 24] }), 
-                zIndexOffset: 5000 
-            })
-            .bindTooltip(hp.place_name, { permanent: true, direction: 'top', className: 'location-tooltip' })
-            .addTo(hoverLayer.current);
-        }
-    }
-
-    // 7. FIXED ROAD ROUTING LOGIC (With State Guard)
-    if (selectedTrip.length > 0 && currentRouteIdsRef.current !== newRouteSignature) {
-        
-        // Update the signature so we don't recalculate on the next hover
-        currentRouteIdsRef.current = newRouteSignature;
-
-        const waypoints = [
-            L.latLng(EKALA.lat, EKALA.lng),
-            ...selectedTrip.map(p => L.latLng(p.latitude, p.longitude))
-        ];
-
-        // If the control already exists, update the waypoints
-        if (routingControlRef.current) {
-            routingControlRef.current.setWaypoints(waypoints);
+        if (!error) {
+            triggerToast('Location Deleted');
+            refreshAllData();
         } else {
-            // Otherwise, create the control
-            routingControlRef.current = L.Routing.control({
-                waypoints: waypoints,
-                router: L.Routing.osrmv1({
-                    serviceUrl: 'https://router.project-osrm.org/route/v1'
-                }),
-                lineOptions: {
-                    styles: [{ color: '#ef4444', weight: 5, opacity: 0.8 }] 
-                },
-                createMarker: () => null, // Prevents default routing markers
-                addWaypoints: false,
-                routeWhileDragging: false,
-                show: false, // Hides the instruction panel (the "mask")
-                units: 'metric'
-            }).addTo(mapRef.current);
+            triggerToast('Error Deleting Location');
         }
     }
 };
 
-            const filteredPlaces = useMemo(() => {
-                let list = editingRouteId ? selectedTrip : places;
-                return list
-                    .filter(p => p.place_name.toLowerCase().includes(searchTerm.toLowerCase()))
-                    .filter(p => filterTag === 'All' || p.category === filterTag)
-                    .filter(p => filterStatus === 'All' || (filterStatus === 'Pending' ? p.status === 'pending' : p.status === 'done'))
-                    .sort((a, b) => sortBy === 'nearest' ? a.distance_km - b.distance_km : new Date(b.created_at) - new Date(a.created_at));
-            }, [places, searchTerm, filterTag, filterStatus, sortBy, editingRouteId, selectedTrip]);
 
-            return (
-                <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
-                    <header className="h-20 flex items-center justify-between px-4 md:px-6 bg-white border-b shrink-0 z-[1001]">
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-lg shadow-slate-200 border border-slate-700/50 transform rotate-3 hover:rotate-0 transition-transform duration-300">
-                                    <i data-lucide="map" className="w-5 h-5 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]"></i>
-                                </div>
-                                <h1 className="text-xl md:text-2xl font-black italic uppercase text-slate-900 tracking-tighter shrink-0">
-                                    My Journal
-                                </h1>
-                            </div>
-                            
+           // --- TAB 2: MAP FUNCTIONS & ROUTING ---
 
-                            
-                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border">
-                                <div className="w-12 md:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${progress}%`}}></div>
-                                </div>
-                                <span className="text-[10px] font-black text-slate-500">{progress}%</span>
-                            </div>
-                        </div>
-                        
-     {/* Database Purge Button
-     
-     <button onClick={exportArticlesAndClearDatabase}
-    className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-rose-50 border-2 border-rose-100 text-rose-600 hover:bg-rose-100 transition-all group">
-    <i data-lucide="trash-2" className="w-4 h-4 group-hover:animate-pulse"></i>
-    <span className="text-[10px] font-black uppercase tracking-widest">Purge & Backup Database</span>
-</button>
-
-*/}
-
-
-                        {selectedTrip.length > 0 && (
-                            <div className="flex items-center gap-1 md:gap-2">
-                                <span className="hidden sm:inline text-xs font-black text-blue-600">{(selectedTrip.reduce((a,b)=>a+b.distance_km,0)).toFixed(1)}KM</span>
-                                {!editingRouteId && (
-                                    <button onClick={handleSaveRoute} className="bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">Save</button>
-                                )}
-                                <button 
-    onClick={() => {
-        setSelectedTrip([]); 
-        setEditingRouteId(null); 
-        setWeatherData({});
-    }} 
-    className="text-[10px] font-black uppercase text-red-500 border border-red-100 px-3 py-2 rounded-xl"
->
-    Clear
-</button>
-                                <button onClick={handleStartRoute} className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">Start</button>
-                            </div>                                                    
-                        )}
-                    </header>
-
-                    {/* NEW MOBILE TABS */}
-                    <div className="lg:hidden flex border-b bg-white shrink-0">
-                        <button onClick={()=>setActiveTab('map')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='map'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Map & Add</button>
-                        <button onClick={()=>setActiveTab('list')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='list'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Places ({filteredPlaces.length})</button>
-                        <button onClick={()=>setActiveTab('routes')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest ${activeTab==='routes'?'text-blue-600 border-b-2 border-blue-600':'text-slate-400'}`}>Routes</button>
-                    </div>
-
-                    <main className="main-grid">
-                        
-                        {/* FIRST COLUMN WITH RESPONSIVE TAB LOGIC */}
-                        <div className={`scroll-column ${(activeTab !== 'map' && activeTab !== 'routes') ? 'mobile-hidden' : 'mobile-map-view'}`}>
-                            
-                            {/* Quick Add - Map Tab Only on Mobile */}
-                            <div className={`bg-white rounded-[1.5rem] border p-4 space-y-3 shrink-0 shadow-sm ${activeTab !== 'map' ? 'hidden lg:block' : ''}`}>
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Quick Add Location</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    <select value={newLocationCategory} onChange={e=>setNewLocationCategory(e.target.value)} className="p-2.5 rounded-2xl bg-slate-100 text-[10px] font-black uppercase border">
-                                        {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <input ref={autocompleteRef} placeholder="Search Google Maps..." className="sm:col-span-2 p-2.5 rounded-2xl bg-slate-50 text-xs border" />
-                                </div>
-                                <button onClick={handleAddLocation} className="w-full py-2.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase">Add to My Bucket List</button>
-                            </div>
-                            
-                            {/* Map Wrapper - Map Tab Only on Mobile */}
-                            <div className={`map-wrapper shadow-xl border-4 border-white rounded-[1.5rem] flex-grow ${activeTab !== 'map' ? 'hidden lg:flex' : ''}`}>
-                                <div id="map-container">
-                                
-                                {/* Map Legend
-                                
-                                    <div className="map-legend">
-                                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Pending</div>
-                                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Visited</div>
-                                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div> Planned (Locked)</div>
-                                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div> Smart Choice</div>
-                                    </div>
-                                    
-                                    */}
-                                    
-                                </div>
-                            </div>
-
-                            {/* Saved Plan History - Routes Tab Only on Mobile */}
-                            <div className={`bg-white rounded-[1.5rem] border p-4 shrink-0 shadow-sm mb-4 lg:mb-0 ${activeTab !== 'routes' ? 'hidden lg:block' : ''}`}>
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">My Saved Plan History</label>
-                                <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-list">
-                                    {savedRoutes.map(r => (
-    <div key={r.id} className="group flex items-center gap-2">
-        <div 
-            onClick={() => {
-                setSelectedTrip(r.waypoints); 
-                setEditingRouteId(r.id); 
-                setActiveTab('list');
-                // Consolidated: Trigger weather fetch for the selected route's waypoints
-                fetchRouteWeather(r.waypoints); 
-            }} 
-            className={`flex-1 p-2.5 rounded-xl border cursor-pointer text-[10px] font-black uppercase transition-all ${
-                editingRouteId === r.id 
-                    ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm' 
-                    : 'bg-slate-50 hover:bg-slate-100'
-            }`}
-        >
-            {r.route_name}
-        </div>
-        <button 
-            onClick={() => handleShareRoute(r)} 
-            className="p-2 text-slate-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
-        >
-            <i data-lucide="share-2" className="w-4 h-4"></i>
-        </button>
-        <button 
-            onClick={() => confirm("Delete plan?") && supabaseClient.from('saved_travel_routes').delete().eq('id', r.id).then(fetchSavedRoutes)} 
-            className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-        >
-            <i data-lucide="trash-2" className="w-4 h-4"></i>
-        </button>
-    </div>
-))}
-                                    
-                                    
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* SECOND COLUMN (PLACES LIST) - Remains unchanged but mapped correctly to 'list' tab */}
-                        <div className={`scroll-column ${activeTab !== 'list' ? 'mobile-hidden' : 'mobile-list-view'}`}>
-                            
-                            {/* Consolidated Analytics Dashboard */}
-                            <div className="bg-slate-900 rounded-[1.5rem] p-5 mb-4 text-white shadow-xl">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Back-End Audit</h2>
-                                        <p className="text-2xl font-black">
-                                            {analytics?.total || 0} 
-                                            <span className="text-xs text-slate-500 font-bold uppercase ml-2">Total Views</span>
-                                        </p>
-                                    </div>
-                                    <button 
-    onClick={async () => {
-        // Optional: you could add a local loading state here to spin the icon
-        await Promise.all([fetchAllAnalytics(), fetchPending()]);
-        triggerToast("Dashboard Updated");
-    }} 
-    className="p-2 bg-slate-800 rounded-xl hover:bg-slate-700 transition-all active:scale-95 group"
->
-    <i data-lucide="refresh-cw" className="w-4 h-4 text-blue-400 group-active:rotate-180 transition-transform duration-500"></i>
-</button>
-                                </div>
-
-                                {/* Section 1: Traffic Sources */}
-                                <div className="mb-6">
-                                    <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest block mb-3">Traffic Source & Devices</label>
-                                    <div className="space-y-4 max-h-[160px] overflow-y-auto pr-2 scrollable-list">
-                                        {(analytics?.pathStats || []).map((stat) => {
-                                            const percentage = analytics.total > 0 ? (stat.count / analytics.total) * 100 : 0;
-                                            return (
-                                                <div key={stat.path} className="space-y-1.5">
-                                                    <div className="flex justify-between text-[9px] font-black uppercase">
-                                                        <span className="truncate flex-1 pr-2 text-slate-300">{stat.path}</span>
-                                                        <span className="text-slate-400 font-mono">{stat.count} Hits</span>
-                                                    </div>
-                                                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                                        <div 
-                                                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700 ease-out" 
-                                                            style={{ width: `${percentage}%` }}
-                                                        ></div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Section 2: Engagement Geo-Analytics */}
-                                <div className="grid grid-cols-2 gap-4 pt-5 border-t border-slate-800/50">
-                                    {/* Likes */}
-                                    <div>
-                                        <label className="text-[8px] font-black text-pink-500 uppercase tracking-widest block mb-2 flex items-center gap-1">
-                                            <i data-lucide="heart" className="w-2.5 h-2.5"></i> Likes
-                                        </label>
-                                        <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1 scrollable-list">
-                                            {(interactionStats?.likes || []).length > 0 ? (
-                                                interactionStats.likes.map((stat, i) => (
-                                                    <div key={i} className="flex justify-between text-[8px] font-bold uppercase border-b border-slate-800/30 pb-1">
-                                                        <span className="text-slate-400 truncate pr-1">{stat.path}</span>
-                                                        <span className="text-pink-400">{stat.count}</span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <span className="text-[7px] text-slate-600 italic">No likes recorded</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Comments */}
-                                    {/* Comments & Notification Center */}
-<div className="col-span-2 mt-4 pt-4 border-t border-slate-800/50">
-    <label className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block mb-3 flex items-center justify-between">
-        <span className="flex items-center gap-1.5">
-            <i data-lucide="bell" className="w-3 h-3"></i> Recent Activity 
-        </span>
-        {pendingComments.filter(c => !c.reply_text).length > 0 && (
-            <span className="bg-rose-500 text-white px-2 py-0.5 rounded-full text-[7px] animate-pulse">
-                {pendingComments.filter(c => !c.reply_text).length} NEW
-            </span>
-        )}
-    </label>
+// --- STABLE MAP INITIALIZATION ---
+const initMap = () => {
+    if (mapRef.current) return;
+    const container = document.getElementById('map-container');
+    if (!container) return;
     
-    <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 scrollable-list">
-        {pendingComments.length > 0 ? (
-            pendingComments.map((c) => (
-                <div key={c.id} className={`p-3 rounded-2xl border ${c.reply_text ? 'bg-slate-800/30 border-slate-800' : 'bg-indigo-500/10 border-indigo-500/30 shadow-sm'}`}>
-                    <div className="flex justify-between items-start mb-1">
-                        <span className="text-[8px] font-black text-indigo-300 uppercase truncate">
-                            {c.travel_bucket_list?.place_name || 'Location'}
-                        </span>
-                        <span className="text-[7px] text-slate-500 font-bold">{new Date(c.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-[10px] text-white font-medium mb-2 italic">"{c.comment_text}"</p>
-                    
-                    {c.reply_text ? (
-                        <div className="bg-slate-900/50 p-2 rounded-xl border border-slate-700">
-                            <p className="text-[8px] font-black text-emerald-400 uppercase mb-1">My Reply:</p>
-                            <p className="text-[9px] text-slate-300">{c.reply_text}</p>
-                        </div>
-                    ) : (
-                        <button 
-    onClick={async (e) => {
-        e.stopPropagation(); // Prevent triggering parent click events
-        
-        const reply = prompt(`Reply to comment at ${c.travel_bucket_list?.place_name || 'this location'}:`);
-        
-        if (reply && reply.trim() !== "") {
-            console.log("Attempting to update comment ID:", c.id);
-            
-            const { data, error } = await supabaseClient
-                .from('location_comments')
-                .update({ 
-                    reply_text: reply, 
-                    replied_at: new Date().toISOString() 
-                })
-                .eq('id', c.id)
-                .select(); // Requesting data back confirms the update worked
+    // Create Map
+    const map = L.map('map-container', { 
+        zoomControl: false, 
+        attributionControl: false 
+    }).setView([7.8731, 80.7718], 8);
 
-            if (error) {
-                console.error("Supabase Update Error:", error);
-                alert(`Database Error: ${error.message}\nCheck if RLS policies allow 'UPDATE' for anon users.`);
-            } else if (data && data.length > 0) {
-                triggerToast("Reply saved to database!");
-                await fetchAllAnalytics(); 
-            } else {
-                console.warn("Update successful but 0 rows affected. Check if the ID matches.");
-                alert("No changes made. The comment ID might be incorrect.");
-            }
-        }
-    }}
-    className="w-full py-1.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-lg text-[8px] font-black uppercase transition-colors"
->
-    Reply to User
-</button>
-                    )}
-                </div>
-            ))
-        ) : (
-            <span className="text-[7px] text-slate-600 italic">No comments to display</span>
-        )}
-        
-        
-       </div>
-      </div>      
-     </div>     
-    </div>
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    markersLayer.current.addTo(map);
     
-    {/* BACK-END AUDIT UI BLOCK */}
-<div className="bg-white rounded-[32px] p-8 shadow-2xl border border-slate-100">
-    <div className="flex items-center justify-between mb-8">
-        <div>
-            <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">
-                Suggestions
-            </h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
-                Verify & Approve Suggestions
+    mapRef.current = map;
+};
+
+const updateMapMarkers = () => {
+    if (!mapRef.current || !markersLayer.current) return;
+    
+    // Clear existing markers before redrawing
+    markersLayer.current.clearLayers();
+
+    places.forEach(p => {
+    if (!p.latitude || !p.longitude) return;
+    
+    const isSelected = selectedTrip.some(item => item.id === p.id);
+    let markerClass = p.status === 'done' ? 'marker-done' : 'marker-pending';
+    if (isSelected) markerClass = 'marker-selected'; 
+
+    const icon = L.divIcon({
+        className: `${markerClass} shadow-md transition-transform duration-200 hover:scale-125`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6]
+    });
+
+    const marker = L.marker([parseFloat(p.latitude), parseFloat(p.longitude)], { 
+        icon,
+        riseOnHover: true 
+    });
+
+    // FIX: Change p.name to p.place_name
+    marker.bindPopup(`
+        <div style="padding: 2px 4px;">
+            <p style="margin:0; font-weight:800; font-size:10px; color:#1e293b; text-transform:uppercase; font-family:'Plus Jakarta Sans', sans-serif;">
+                ${p.place_name} 
+            </p>
+            <p style="margin:0; font-size:8px; color:#64748b; font-weight:600; text-transform:uppercase;">
+                ${p.category || 'Location'}
             </p>
         </div>
-        <div className="px-4 py-2 bg-amber-50 rounded-full border border-amber-100">
-            <span className="text-[10px] font-black text-amber-600 uppercase">
-                {pendingItems.length} Waiting
+    `, { 
+        closeButton: false, 
+        offset: L.point(0, -8)
+    });
+
+    marker.on('mouseover', function() { this.openPopup(); });
+    marker.on('mouseout', function() { this.closePopup(); });
+
+    marker.addTo(markersLayer.current);
+});
+};
+
+const calculateRouteDistance = () => {
+    if (selectedTrip.length === 0) return 0;
+    let totalMeters = 0;
+
+    // 1. Leg: Current GPS Location to the FIRST stop
+    if (userCoords) {
+        const start = L.latLng(userCoords.lat, userCoords.lng);
+        const firstStop = L.latLng(selectedTrip[0].latitude, selectedTrip[0].longitude);
+        totalMeters += start.distanceTo(firstStop);
+    }
+
+    // 2. Legs: Between all stops in the Active Plan
+    for (let i = 0; i < selectedTrip.length - 1; i++) {
+        const from = L.latLng(selectedTrip[i].latitude, selectedTrip[i].longitude);
+        const to = L.latLng(selectedTrip[i+1].latitude, selectedTrip[i+1].longitude);
+        totalMeters += from.distanceTo(to);
+    }
+
+    return (totalMeters / 1000).toFixed(1); // Result in Kilometers
+};
+
+const handleSaveRoute = async () => {
+    if (selectedTrip.length < 2) return triggerToast("Add at least 2 locations");
+    const name = prompt("Enter Route Name:");
+    if (!name) return;
+    
+    const { error } = await supabaseClient.from('saved_travel_routes').insert([{
+        route_name: name,
+        waypoints: selectedTrip.map(p => p.id)
+    }]);
+    
+    if (!error) { 
+        triggerToast('Route Saved'); 
+        refreshAllData(); 
+    }
+};
+
+const deleteRoute = async (id) => {
+    if (confirm("Delete this route plan?")) {
+        const { error } = await supabaseClient.from('saved_travel_routes').delete().eq('id', id);
+        if (!error) {
+            triggerToast('Route Deleted');
+            refreshAllData();
+        }
+    }
+};
+
+React.useEffect(() => {
+    if (activeTab === 'map' && mapRef.current) {
+        // Force the map to recalculate its container size after the tab switch
+        setTimeout(() => {
+            mapRef.current.invalidateSize();
+        }, 200);
+    }
+}, [activeTab]);
+
+React.useEffect(() => {
+    if (activeTab !== 'map' || !mapRef.current) return;
+
+    // --- PART A: MARKERS (Keep these updated for status colors) ---
+    markersLayer.current.clearLayers();
+    places.forEach(p => {
+        if (!p.latitude || !p.longitude) return;
+        const isSelected = selectedTrip.some(item => item.id === p.id);
+        let markerClass = p.status === 'done' ? 'marker-done' : 'marker-pending';
+        if (isSelected) markerClass = 'marker-selected'; 
+
+        const icon = L.divIcon({
+            className: `${markerClass} shadow-lg`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        });
+
+        L.marker([parseFloat(p.latitude), parseFloat(p.longitude)], { icon })
+            .bindPopup(`<div class="p-1 font-sans"><p class="font-black text-[10px] uppercase text-slate-800">${p.name}</p></div>`, { closeButton: false })
+            .addTo(markersLayer.current);
+    });
+
+    // --- PART B: FIXED ROUTE (The Flashing Fix) ---
+    const currentPoints = selectedTrip.map(p => `${p.latitude},${p.longitude}`).join('|');
+    
+    // ONLY update the route if the list of locations has actually changed
+    if (currentPoints === lastRoutePoints.current) return;
+    lastRoutePoints.current = currentPoints;
+
+    const routeTimeout = setTimeout(() => {
+        if (routingControl.current) {
+            try {
+                mapRef.current.removeControl(routingControl.current);
+                routingControl.current = null;
+            } catch (e) {}
+        }
+
+        const points = [];
+        if (userCoords?.lat) points.push(L.latLng(userCoords.lat, userCoords.lng));
+        selectedTrip.slice(0, 10).forEach(p => {
+            if (p.latitude && p.longitude) points.push(L.latLng(p.latitude, p.longitude));
+        });
+
+        if (points.length >= 2) {
+            routingControl.current = L.Routing.control({
+                plan: L.Routing.plan(points, { createMarker: () => null }),
+                router: L.Routing.osrmv1({ 
+                    serviceUrl: `https://router.project-osrm.org/route/v1`,
+                    profile: 'car',
+                    useHints: false 
+                }),
+                lineOptions: { 
+                    styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }], // RED Route
+                    addWaypoints: false,
+                    extendToWaypoints: false,
+                    missingRouteTolerance: 0
+                },
+                addWaypoints: false,
+                show: false
+            }).addTo(mapRef.current);
+        }
+    }, 400);
+
+    return () => {
+        clearTimeout(routeTimeout);
+    };
+}, [activeTab, selectedTrip, places]); // Removed userCoords from deps to stop flashing on GPS move
+
+
+// --- SHARING & QR SYSTEM ---
+
+const shareRoute = (route) => {
+    // Correct Google Maps Directions URL
+    const baseUrl = "https://www.google.com/maps/dir/";
+    const points = route.waypoints.map(id => {
+        const p = places.find(pl => pl.id === id);
+        return p ? `${p.latitude},${p.longitude}` : '';
+    }).filter(p => p !== '').join('/');
+    
+    const mapsUrl = baseUrl + points;
+
+    const message = `*My Journal Route: ${route.route_name}*\nNavigation: ${mapsUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+
+    showQRCode(mapsUrl, route.route_name);
+};
+const showQRCode = (url, name) => {
+    const overlay = document.createElement('div');
+    overlay.className = "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4";
+    overlay.onclick = () => overlay.remove();
+
+    const modal = document.createElement('div');
+    modal.className = "bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 max-w-xs w-full animate-in zoom-in-95 duration-200";
+    modal.onclick = (e) => e.stopPropagation();
+
+    modal.innerHTML = `
+        <p class="text-[10px] font-black uppercase text-slate-400">Scan Travel Route</p>
+        <p class="text-[12px] font-black uppercase text-slate-800 text-center leading-tight">${name}</p>
+        <div id="qrcode-canvas" class="p-2 bg-white rounded-xl"></div>
+        <button class="mt-2 w-full py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Close</button>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    new QRCode(document.getElementById("qrcode-canvas"), {
+        text: url,
+        width: 200,
+        height: 200,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+
+    modal.querySelector('button').onclick = () => overlay.remove();
+};
+
+            // --- TAB 3: DASHBOARD FUNCTIONS ---
+
+const dashboardStats = React.useMemo(() => {
+    // Safety Guards: Ensure data exists and is an array
+    const safeAnalytics = Array.isArray(analyticsData) ? analyticsData : [];
+    const safeLikes = Array.isArray(likesData) ? likesData : [];
+
+    const cityVisits = {};
+    const countryVisits = {};
+    const deviceVisits = { Desktop: 0, Mobile: 0, Tablet: 0 };
+    
+    // 1. Process Page Visits Metrics
+    safeAnalytics.forEach(v => {
+        if (!v) return;
+        
+        // Aggregate Geography
+        if (v.city) cityVisits[v.city] = (cityVisits[v.city] || 0) + 1;
+        if (v.country) countryVisits[v.country] = (countryVisits[v.country] || 0) + 1;
+        
+        // Aggregate Devices
+        const ua = (v.user_agent || "").toLowerCase();
+        if (ua.includes('tablet') || ua.includes('ipad')) {
+            deviceVisits.Tablet++;
+        } else if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+            deviceVisits.Mobile++;
+        } else {
+            deviceVisits.Desktop++;
+        }
+    });
+
+    // 2. Process Likes Summary (Location, Hits, City, Country)
+    const likesMap = {};
+    safeLikes.forEach(l => {
+        // Use the joined travel_bucket_list table for the name
+        const locName = l.travel_bucket_list?.place_name || 'Unknown Location';
+        if (!likesMap[locName]) {
+            likesMap[locName] = { 
+                name: locName, 
+                hits: 0, 
+                city: l.city || 'N/A', 
+                country: l.country || 'N/A' 
+            };
+        }
+        likesMap[locName].hits += 1;
+    });
+
+    // Sort by most hits
+    const likesSummary = Object.values(likesMap).sort((a, b) => b.hits - a.hits);
+
+    return { 
+        totalVisits: safeAnalytics.length,
+        deviceVisits, 
+        cityVisits, 
+        countryVisits, 
+        likesSummary 
+    };
+}, [analyticsData, likesData]);
+
+// --- DASHBOARD ACTIONS (Comments & Suggestions) ---
+
+// Handles replying to comments via the input field in the dashboard
+const submitCommentReply = async (commentId, inputId) => {
+    const inputElement = document.getElementById(inputId);
+    const replyText = inputElement?.value.trim();
+
+    if (!replyText) {
+        triggerToast("Please enter a reply");
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('location_comments')
+        .update({ reply_text: replyText })
+        .eq('id', commentId);
+
+    if (!error) {
+        triggerToast('Reply Posted Successfully');
+        inputElement.value = ""; // Clear input
+        refreshAllData(); // Refresh UI
+    } else {
+        triggerToast('Failed to post reply');
+        console.error(error);
+    }
+};
+
+// Handles Approve/Reject for Suggestion Approvals
+const handleSuggestionAction = async (suggestionId, action) => {
+    try {
+        if (action === 'rejected') {
+            // 1. DELETE FROM PENDING TABLE
+            const { error: deleteError } = await supabaseClient
+                .from('pending_approvals')
+                .delete()
+                .eq('id', suggestionId);
+
+            if (deleteError) throw deleteError;
+            triggerToast('Suggestion Removed');
+
+        } else if (action === 'approved') {
+            // 1. FETCH DATA FROM PENDING TABLE FIRST
+            const { data: suggestion, error: fetchError } = await supabaseClient
+                .from('pending_approvals')
+                .select('*')
+                .eq('id', suggestionId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            // 2. INSERT INTO TRAVEL_BUCKET_LIST (Mapping columns)
+            const { error: insertError } = await supabaseClient
+                .from('travel_bucket_list')
+                .insert([{
+                    place_name: suggestion.place_name,
+                    google_maps_url: suggestion.map_url,
+                    latitude: suggestion.latitude,
+                    longitude: suggestion.longitude,
+                    category: suggestion.category,
+                    locality: suggestion.district, // Mapping District to Locality
+                    cover_photo_url: suggestion.image_url,
+                    status: 'Pending', // New items in bucket list usually start as Pending
+                    created_at: new Date().toISOString()
+                }]);
+
+            if (insertError) throw insertError;
+
+            // 3. REMOVE FROM PENDING TABLE AFTER SUCCESSFUL MOVE
+            const { error: deleteError } = await supabaseClient
+                .from('pending_approvals')
+                .delete()
+                .eq('id', suggestionId);
+
+            if (deleteError) throw deleteError;
+            triggerToast('Location Added to Bucket List');
+        }
+
+        // Refresh UI data
+        refreshAllData();
+
+    } catch (err) {
+        console.error("Dashboard Action Error:", err);
+        triggerToast('Action failed: ' + err.message);
+    }
+};
+
+
+            // RENDER
+            return (
+                <div className="flex flex-col h-screen bg-slate-50">
+                    {/* GLOBAL HEADER */}
+                    <header className="h-16 bg-white border-b flex items-center justify-between px-6 z-[1001] shrink-0 shadow-sm">
+                        <div className="flex items-center gap-6">
+                            <h1 className="text-sm font-black uppercase tracking-tighter text-indigo-900 hidden sm:block">My Journal Admin</h1>
+                            <nav className="flex bg-slate-100 p-1 rounded-xl">
+                                {['places', 'map', 'dashboard'].map(t => (
+                                    <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{t}</button>
+                                ))}
+                            </nav>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                        
+                            <div className="relative flex items-center gap-2">
+    {/* 1. Location Name Search */}
+    <div className="relative flex items-center">
+        <i data-lucide="search" className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none"></i>
+        <input 
+            ref={autocompleteRef} 
+            placeholder="Search Google Maps..." 
+            className="w-48 sm:w-64 pl-9 pr-4 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500/20" 
+        />
+    </div>
+    
+    {/* 2. Category Selection & 3. Submit/Save Button (Only shows after a place is searched) */}
+    {stagedLocation && (
+        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
+            <select 
+                value={stagedLocation.category} 
+                onChange={(e) => setStagedLocation({...stagedLocation, category: e.target.value})} 
+                className="px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
+            >
+                {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            
+            <button 
+                onClick={saveStagedLocation} 
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 transition-all active:scale-95"
+            >
+                <i data-lucide="plus" className="w-3 h-3"></i>
+                Save Location
+            </button>
+
+            <button 
+                onClick={() => {
+                    setStagedLocation(null);
+                    if(autocompleteRef.current) autocompleteRef.current.value = '';
+                }} 
+                className="p-2 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl transition-colors"
+                title="Cancel"
+            >
+                <i data-lucide="x" className="w-3.5 h-3.5"></i>
+            </button>
+        </div>
+    )}
+</div>
+                        </div>
+                    </header>
+
+                    {/* MAIN CONTENT AREA */}
+                    <main className="flex-1 overflow-hidden relative">
+                        
+                        {/* TAB 1: PLACES */}
+                        {activeTab === 'places' && (
+                            <div className="h-full flex flex-col">
+                                <div className="px-8 py-4 bg-white border-b border-slate-100 flex flex-wrap gap-4 shrink-0">
+                                    <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search Local..." className="w-48 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none" />
+                                    <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none">
+                                        <option value="All">All Categories</option>
+                                        {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none">
+                                        <option value="All">All Status</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="done">Completed</option>
+                                    </select>
+                                    
+                                    <select 
+    value={sortBy} 
+    onChange={(e) => setSortBy(e.target.value)} 
+    className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none"
+>
+    <option value="newest">Newest First</option>
+    <option value="distance">Nearest First</option>
+</select>
+
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                                        {processedPlaces.map(p => (
+                                            <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative">
+                                                {/* Image Cover */}
+<div className="h-32 bg-slate-200 relative shrink-0">
+    {p.cover_photo_url ? (
+        <img src={p.cover_photo_url} alt="Cover" className="w-full h-full object-cover" />
+    ) : (
+        <div className="w-full h-full flex items-center justify-center text-slate-400">
+            <i data-lucide="image" className="w-6 h-6"></i>
+        </div>
+    )}
+    
+    {/* Delete Button (New) */}
+    <button 
+        onClick={() => deleteLocation(p.id, p.place_name)}
+        className="absolute top-2 left-2 p-1.5 bg-white/80 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-md transition-all opacity-0 group-hover:opacity-100"
+    >
+        <i data-lucide="trash-2" className="w-3 h-3"></i>
+    </button>
+
+    {/* Status Toggle */}
+    <button onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md ${p.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white text-orange-500'}`}>
+        {p.status}
+    </button>
+</div>
+                                                
+                                                {/* Body Editables */}
+                                                <div className="p-4 flex-1 flex flex-col gap-2">
+                                                    <input 
+    type="text"
+    defaultValue={p.place_name} 
+    onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+            e.target.blur(); // Triggers the onBlur logic below
+        }
+    }}
+    onBlur={(e) => {
+        const newName = e.target.value.trim();
+        if (newName && newName !== p.place_name) {
+            updatePlaceField(p.id, 'place_name', newName);
+        }
+    }} 
+    className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full"
+    title="Edit Name - Press Enter to Save"
+/>
+                                                    <div className="flex flex-col gap-1 px-1">
+    <p className="text-[9px] font-bold text-slate-400 uppercase truncate flex items-center gap-1">
+        <i data-lucide="map-pin" className="w-3 h-3"></i> {p.locality || 'Unknown Locality'}
+    </p>
+    {/* Display Distance */}
+    <p className="text-[9px] font-black text-indigo-500 uppercase flex items-center gap-1">
+        <i data-lucide="navigation-2" className="w-3 h-3"></i> 
+        {p.distance_km ? `${p.distance_km} KM Away` : 'Calculating...'}
+    </p>
+</div>
+                                                    <select 
+                                                        value={p.category} 
+                                                        onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)}
+                                                        className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer"
+                                                    >
+                                                        {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                {/* Footer Actions */}
+                                                <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo"><i data-lucide="camera" className="w-3.5 h-3.5"></i></button>
+                                                        <button onClick={() => promptForValue(p.id, 'photo_album_url', p.photo_album_url, 'Photo Album URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.photo_album_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Album Link"><i data-lucide="images" className="w-3.5 h-3.5"></i></button>
+                                                        <button onClick={() => promptForValue(p.id, 'ai_article', p.ai_article, 'AI Article Content')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.ai_article ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Article"><i data-lucide="file-text" className="w-3.5 h-3.5"></i></button>
+                                                    </div>
+                                                    <a href={p.google_maps_url || `https://maps.google.com/?q=${p.latitude},${p.longitude}`} target="_blank" className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors" title="Open in Maps">
+                                                        <i data-lucide="navigation" className="w-3.5 h-3.5"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 2: MAP */}
+                        {activeTab === 'map' && (
+    <div className="flex h-full">
+        {/* Sidebar: Planner & Locations */}
+        <aside className="w-80 border-r border-slate-100 flex flex-col bg-white overflow-hidden shadow-2xl z-[1000]">
+            
+            {/* 1. Saved Route Plans (Consolidated Scrollable List) */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/30">
+                <div className="flex justify-between items-center mb-3">
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saved Route Plans</p>
+                    <button 
+                        onClick={() => {
+                            setFilteredPlaces(places);
+                            setSelectedTrip([]);
+                            setSearchTerm('');
+                            if (routingControl.current) mapRef.current.removeControl(routingControl.current);
+                            triggerToast('View Reset');
+                        }}
+                        className="text-[8px] font-black uppercase text-rose-500 hover:text-rose-600 transition-colors"
+                    >
+                        Reset All
+                    </button>
+                </div>
+                
+                <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+    {savedRoutes.length === 0 ? (
+        <p className="text-[10px] text-slate-300 italic py-4 text-center border border-dashed border-slate-200 rounded-xl uppercase font-bold">No saved routes</p>
+    ) : (
+        savedRoutes.map((route) => (
+            <div 
+    key={route.id} 
+    className="p-2.5 bg-white border border-slate-100 rounded-xl shadow-sm hover:border-emerald-200 transition-all group"
+>
+    <div 
+        onClick={() => {
+            // 1. DATA PARSING: Handle if waypoints is a string or already an array
+            let wpArray = [];
+            try {
+                wpArray = typeof route.waypoints === 'string' 
+                    ? JSON.parse(route.waypoints) 
+                    : (route.waypoints || []);
+            } catch (e) {
+                console.error("Failed to parse waypoints", e);
+                return triggerToast("Error: Invalid route data format");
+            }
+
+            // 2. DIRECT MAPPING: Use the data already in the waypoints
+            // No need to search the 'places' array because the objects are here!
+            if (wpArray.length > 0) {
+                // Ensure field names match what your app expects (e.g., place_name vs name)
+                const mappedPlaces = wpArray.map(wp => ({
+                    ...wp,
+                    // If your UI uses 'name' but the DB uses 'place_name', sync them here:
+                    name: wp.place_name || wp.name 
+                }));
+
+                // 3. UI SYNC: Update the Active Plan list and Map
+                setFilteredPlaces(mappedPlaces);
+                setSelectedTrip(mappedPlaces); 
+                setActiveTab('map'); 
+                
+                triggerToast(`Loaded: ${route.route_name}`);
+            } else {
+                triggerToast("Error: This route has no saved locations");
+            }
+        }} 
+        className="cursor-pointer"
+    >
+        <div className="flex justify-between items-start">
+            <p className="text-[10px] font-black uppercase text-slate-700 group-hover:text-emerald-600 transition-colors">
+                {route.route_name}
+            </p>
+            <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-1 py-0.5 rounded uppercase">
+                {Array.isArray(route.waypoints) ? route.waypoints.length : 0} Pts
             </span>
+        </div>
+        <p className="text-[7px] font-bold text-slate-400 uppercase mt-1">Tap to load route</p>
+    </div>
+    
+    {/* Action Buttons (Share/Delete) */}
+    <div className="flex gap-1.5 mt-2">
+        <button onClick={(e) => { e.stopPropagation(); shareRoute(route); }} className="flex-1 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase border border-emerald-100">Share</button>
+        <button onClick={(e) => { e.stopPropagation(); deleteRoute(route.id); }} className="flex-1 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase border border-rose-100">Delete</button>
+    </div>
+</div>
+        ))
+    )}
+</div>
+            </div>
+
+            {/* 2. Active Trip Planner - Consolidated with Logic Fixes */}
+<div className="p-4 border-b border-slate-100 bg-indigo-50/30">
+    <div className="flex justify-between items-end mb-3">
+        <div>
+            <div className="flex items-center gap-2">
+                <p className="text-[10px] font-black uppercase text-indigo-700">Active Plan ({selectedTrip.length})</p>
+                {/* Visual Indicator of GPS Anchor */}
+                {userCoords && selectedTrip.length > 0 && (
+                    <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" title="Live GPS Connected"></span>
+                )}
+            </div>
+            {/* Real-time distance including the drive from your current location */}
+            <p className="text-[8px] font-bold uppercase text-slate-500 mt-1 tracking-tighter">
+                {selectedTrip.length > 0 
+                    ? `Est. Journey: ${calculateRouteDistance()} KM` 
+                    : "Select a route or add locations"}
+            </p>
+        </div>
+        
+        <div className="flex gap-2">
+            {/* Clear Button: Returns to "Discovery" mode */}
+            {selectedTrip.length > 0 && (
+                <button 
+                    onClick={() => {
+                        setSelectedTrip([]);
+                        setFilteredPlaces(places);
+                        triggerToast("Plan Cleared");
+                    }}
+                    className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase active:scale-95 transition-all"
+                >
+                    Clear
+                </button>
+            )}
+            
+            <button 
+                onClick={handleSaveRoute} 
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                disabled={selectedTrip.length < 2}
+            >
+                Save Plan
+            </button>
         </div>
     </div>
 
-    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-        {pendingItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between p-5 border border-slate-100 rounded-3xl bg-slate-50/50 hover:bg-white hover:shadow-xl transition-all border-l-4 border-l-indigo-500">
-            
-                <div className="flex gap-4 items-center">                    
-                    <div>
-                        <h4 className="font-black text-slate-900 text-sm leading-tight">
-                            {item.place_name}
-                        </h4>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">
-                                {item.category}
-                            </span>
-                            <span className="text-slate-300 text-[9px]">•</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                {item.district}
-                            </span>
-                        </div>
+    {/* Scrollable Location List */}
+    <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar">
+        {selectedTrip.length === 0 ? (
+            <div className="py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center opacity-40">
+                <i data-lucide="map-pin" className="w-4 h-4 text-slate-400 mb-1"></i>
+                <p className="text-[7px] font-black uppercase text-slate-400">Your trip is empty</p>
+            </div>
+        ) : (
+            selectedTrip.map((t, idx) => (
+                <div key={`${t.id}-${idx}`} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-indigo-100 shadow-sm group animate-in slide-in-from-right-2 duration-200">
+                    <div className="flex flex-col">
+                        <span className="text-[9px] font-black uppercase truncate pr-2 text-slate-800">
+                            {idx + 1}. {t.place_name}
+                        </span>
+                        {/* Sub-label for context */}
+                        <span className="text-[7px] font-bold text-indigo-400 uppercase">
+                            {idx === 0 ? "First Stop" : "Next Destination"}
+                        </span>
                     </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                
-                    <button onClick={() => handleApproveLocation(item)}
-                        className="w-11 h-11 flex items-center justify-center text-slate-400 hover:text-green-500 hover:bg-green-50 rounded-2xl transition-all">
-        <i data-lucide="check" className="w-5 h-5"></i>
-                   </button>
+                    
                     <button 
-                        onClick={() => handleReject(item.id)}
-                        className="w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all">
-                        <i data-lucide="trash-2" className="w-4 h-4"></i>
+                        onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} 
+                        className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                    >
+                        <i data-lucide="x" className="w-3 h-3"></i>
                     </button>
                 </div>
-            </div>
-        ))}
-
-        {pendingItems.length === 0 && (
-            <div className="py-24 text-center border-2 border-dashed border-slate-100 rounded-[32px]">
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">
-                    No Pending Approvals
-                </p>
-            </div>
+            ))
         )}
     </div>
 </div>
-                            
-                            
-                 
-                            <div className="sticky top-0 z-[100] bg-white/95 backdrop-blur rounded-[1.5rem] border p-4 space-y-3 shadow-sm mb-4">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter Bucket List</label>
-                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                                        <button onClick={()=>setSortBy('newest')} className={`px-2 py-1 text-[8px] font-black rounded uppercase ${sortBy==='newest'?'bg-white shadow-sm':'text-slate-400'}`}>New</button>
-                                        <button onClick={()=>setSortBy('nearest')} className={`px-2 py-1 text-[8px] font-black rounded uppercase ${sortBy==='nearest'?'bg-white shadow-sm':'text-slate-400'}`}>Near</button>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex flex-wrap gap-2">
-                                    <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="flex-1 p-2 rounded-xl bg-slate-50 text-[10px] font-black border uppercase min-w-[120px]" />
-                                    <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="p-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase"><option value="Pending">Pending</option><option value="Completed">Visited</option><option value="All">All</option></select>
-                                    <select value={filterTag} onChange={e=>setFilterTag(e.target.value)} className="p-2 rounded-xl bg-slate-50 text-[10px] font-black uppercase border"><option value="All">All Tags</option>{VALID_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                    
-                                    <button onClick={repairLocality} className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
-                                        <i data-lucide="shield-check" className="w-3.5 h-3.5"></i>Repair Database Metadata
-                                    </button>
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-24">
-                            
-                                {filteredPlaces.map(p => {
-    const isSelected = selectedTrip.find(st => st.id === p.id);
-    const isSmart = smartChoiceIds.includes(p.id) && p.status === 'pending';
-    const parentPlan = savedRoutes.find(r => r.waypoints.some(w => w.id === p.id));
-    const isLocked = lockedLocationIds.has(p.id);
-    const isJournaled = p.cover_photo_url || p.photo_album_url;
-
-    return (
-        <div key={p.id} 
-            onMouseEnter={() => setHoveredPlaceId(p.id)} 
-            onMouseLeave={() => setHoveredPlaceId(null)} 
-            onClick={() => {
-                if (isLocked) return; 
-                isSelected ? setSelectedTrip(selectedTrip.filter(s => s.id !== p.id)) : setSelectedTrip([...selectedTrip, p]);
-            }} 
-            className={`location-card rounded-[1.5rem] bg-white border-2 flex flex-col transition-all cursor-pointer relative shadow-sm
-            ${isSelected ? 'border-red-500 bg-red-50' : isSmart ? 'border-blue-200 shadow-md' : 'border-slate-100 hover:border-slate-300'}
-            ${isLocked ? 'border-slate-200 shadow-none' : ''}`}>
-            
-            {/* Locked Overlay: Constrained to image area only (h-32) */}
-            {isLocked && (
-                <div className="absolute top-0 left-0 right-0 h-32 z-20 flex items-center justify-center bg-slate-900/10 rounded-t-[1.3rem] backdrop-blur-[2px]">
-                    <div className="bg-slate-900/80 text-white p-2.5 rounded-full shadow-lg border border-white/20">
-                        <i data-lucide="lock" className="w-4 h-4"></i>
+            {/* 3. Available Locations (With Search) */}
+            <div className="flex-1 flex flex-col min-h-0 bg-white">
+                <div className="p-4 bg-white border-b border-slate-50">
+                    <div className="relative">
+                        <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
+                        <input 
+                            type="text"
+                            placeholder="Search locations..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold uppercase outline-none focus:border-emerald-400 transition-all"
+                        />
                     </div>
                 </div>
-            )}
-
-            {/* Image Section */}
-            <div className={`h-32 bg-slate-100 relative overflow-hidden rounded-t-[1.3rem] shrink-0 ${isLocked ? 'grayscale' : ''}`}>
-                {p.cover_photo_url ? (
-                    <img src={p.cover_photo_url} className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300">
-                        <i data-lucide="image"></i>
-                    </div>
-                )}
                 
-                <div className="absolute top-2 left-2 flex flex-col gap-1 z-[30]">
-                    <select 
-                        value={p.category} 
-                        onChange={(e) => updateField(p.id, 'category', e.target.value)}
-                        onClick={(e) => e.stopPropagation()} 
-                        className="bg-white/95 px-2 py-1 rounded-lg text-[8px] font-black uppercase w-fit border-none shadow-sm outline-none text-slate-900"
-                    >
-                        {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                    {(filteredPlaces.length > 0 ? filteredPlaces : places)
+                        .filter(p => p.place_name.toLowerCase().includes(searchTerm.toLowerCase()))
+                        .filter(p => !selectedTrip.find(t => t.id === p.id))
+                        .map(p => (
+                            <div key={p.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors group">
+                                <span className="text-[9px] font-bold uppercase truncate text-slate-600 group-hover:text-slate-900">{p.place_name}</span>
+                                <button onClick={() => setSelectedTrip([...selectedTrip, p])} className="text-emerald-500 hover:bg-emerald-50 p-1 rounded-md transition-all">
+                                    <i data-lucide="plus-circle" className="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        ))}
+                </div>
+            </div>
+        </aside>
+
+        {/* Map Display */}
+        <section className="flex-1 relative bg-slate-100">
+            <div id="map-container" className="w-full h-full"></div>
+            {/* Legend or Map controls can go here */}
+        </section>
+    </div>
+)}
+
+                        {/* TAB 3: DASHBOARD */}
+{activeTab === 'dashboard' && (
+    <div className="h-full overflow-y-auto p-8 no-scrollbar bg-slate-50">
+        
+        {/* DASHBOARD HEADER WITH REFRESH BUTTON */}
+        <div className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
+            <div>
+                <h1 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter">System Overview</h1>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Real-time journal analytics</p>
+            </div>
+            
+            <button 
+                onClick={async (e) => {
+                    const btn = e.currentTarget;
+                    btn.classList.add('animate-spin'); 
+                    await refreshAllData();
+                    if (window.lucide) window.lucide.createIcons();
+                    triggerToast("Data Synchronized");
+                    setTimeout(() => btn.classList.remove('animate-spin'), 600);
+                }}
+                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all group active:scale-95"
+                title="Refresh Data"
+            >
+                <i data-lucide="refresh-cw" className="w-5 h-5 text-indigo-600 group-hover:rotate-180 transition-transform duration-500"></i>
+            </button>
+        </div>
+
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+            
+            {/* 1. Page Visits Block (Updated to 3 Columns) */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
+                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
+                <div className="flex justify-between items-end mb-8 relative z-10">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-indigo-400 mb-1">Total Visits</p>
+                        <p className="text-5xl font-black italic">{dashboardStats.totalVisits}</p>
+                    </div>
+                    <i data-lucide="globe-2" className="w-8 h-8 text-slate-700"></i>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-6 relative z-10">
+                    <div>
+                        <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1">Countries</p>
+                        <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                            {Object.entries(dashboardStats.countryVisits).map(([c, count]) => (
+                                <div key={c} className="flex justify-between text-[10px] font-bold text-slate-300">
+                                    <span className="truncate pr-2">{c}</span>
+                                    <span className="text-white">{count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1">Cities</p>
+                        <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                            {Object.entries(dashboardStats.cityVisits).map(([c, count]) => (
+                                <div key={c} className="flex justify-between text-[10px] font-bold text-slate-300">
+                                    <span className="truncate pr-2">{c}</span>
+                                    <span className="text-white">{count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1">Devices</p>
+                        <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                            {Object.entries(dashboardStats.deviceVisits || {}).map(([d, count]) => (
+                                <div key={d} className="flex justify-between text-[10px] font-bold text-slate-300">
+                                    <span className="truncate pr-1" title={d}>{d}</span>
+                                    <span className="text-white">{count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Sharp Content Section (z-30 sits above all overlays) */}
-            <div className="p-4 flex-1 flex flex-col min-h-0 relative z-30">
-                
-                {/* MOVED: Route Tag (Visible even when locked) */}
-                {parentPlan && (
-                    <div className="mb-2 bg-amber-400 text-black px-2 py-1 rounded-lg text-[7px] font-black uppercase flex items-center gap-1.5 w-fit shadow-sm border border-amber-500/20">
-                        <i data-lucide="milestone" className="w-2.5 h-2.5"></i>
-                        <span>{parentPlan.route_name}</span>
+            {/* 2. Likes Metrics Block */}
+            <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
+                        <p className="text-4xl font-black italic">{dashboardStats.likesSummary.reduce((acc, curr) => acc + curr.hits, 0)} <span className="text-sm opacity-60">Likes</span></p>
                     </div>
-                )}
-
-                <div className="flex justify-between items-start gap-2 mb-3">
-                    <div className="flex-1 min-w-0">
-                        <h3 onClick={(e) => { e.stopPropagation(); handleEditName(p); }} 
-                            className="font-extrabold text-slate-800 text-[11px] uppercase truncate leading-tight hover:text-blue-600 cursor-edit">
-                            {p.place_name}
-                        </h3>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">{p.locality || 'Unknown Area'}</p>
-                    </div>
-                    <span className="text-[9px] font-black text-slate-400 italic shrink-0">{p.distance_km} KM</span>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><i data-lucide="heart" className="w-5 h-5 fill-white text-white"></i></div>
                 </div>
-                
-                {/* Weather Widget: High Contrast Design */}
-                {weatherData[p.place_name] && (
-                    <div className="mb-4 p-2.5 bg-slate-900 rounded-2xl flex justify-between items-center shadow-xl border border-slate-700">
-                        <div className="flex flex-col">
-                            <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Current</span>
-                            <span className="text-[10px] font-bold text-blue-400">
-                                {weatherData[p.place_name].current}°C <span className="text-slate-500 mx-1">•</span> {weatherData[p.place_name].currentCond}
-                            </span>
-                        </div>
-                        <div className="h-6 w-px bg-slate-800 mx-2"></div>
-                        <div className="flex flex-col text-right">
-                            <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Tomorrow</span>
-                            <span className="text-[10px] font-bold text-emerald-400">
-                                {weatherData[p.place_name].nextDay}°C <span className="text-slate-500 mx-1">•</span> {weatherData[p.place_name].nextCond}
-                            </span>
-                        </div>
+                <div className="grid grid-cols-1 gap-2 bg-black/10 p-4 rounded-2xl">
+                    <p className="text-[8px] font-black uppercase text-pink-200 mb-1">Most Liked Locations</p>
+                    <div className="max-h-32 overflow-y-auto no-scrollbar space-y-2">
+                        {dashboardStats.likesSummary.slice(0, 5).map((item, i) => (
+                            <div key={i} className="flex justify-between items-center border-b border-white/10 pb-1">
+                                <p className="text-[10px] font-bold truncate pr-4">{item.name}</p>
+                                <p className="text-[10px] font-black">{item.hits}</p>
+                            </div>
+                        ))}
                     </div>
-                )}
+                </div>
+            </div>
 
-                <div className="flex flex-col gap-3 pt-3 border-t border-slate-100 mt-auto" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between px-1">
-                        <button onClick={() => updateField(p.id, 'cover_photo_url', prompt("Image URL:", p.cover_photo_url))} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.cover_photo_url ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:bg-slate-50'}`}>
-                            <i data-lucide="camera" className="w-3.5 h-3.5"></i>
-                        </button>
-                        <button onClick={() => updateField(p.id, 'photo_album_url', prompt("Album Link:", p.photo_album_url))} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.photo_album_url ? 'text-blue-500 bg-blue-50' : 'text-slate-300 hover:text-blue-500'}`}>
-                            <i data-lucide="folder-plus" className="w-3.5 h-3.5"></i>
-                        </button>
-                        {p.photo_album_url && (
-                            <button onClick={() => window.open(p.photo_album_url)} className="w-8 h-8 flex items-center justify-center text-indigo-500 bg-indigo-50 rounded-xl transition-all">
-                                <i data-lucide="external-link" className="w-3.5 h-3.5"></i>
-                            </button>
-                        )}
-                        <button onClick={() => handleManualArticle(p)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${p.ai_article ? 'text-amber-500 bg-amber-50 shadow-inner' : 'text-slate-300 hover:text-amber-500'}`}>
-                            <i data-lucide={p.ai_article ? "sparkles" : "wand-2"} className="w-3.5 h-3.5"></i>
-                        </button>
-                    </div>
-
-                    {!isJournaled ? (
-                        <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-2xl">
-                            <button onClick={() => window.open(p.google_maps_url || `http://googleusercontent.com/maps.google.com/${p.latitude},${p.longitude}`, '_blank')} className="flex-1 flex items-center justify-center gap-2 py-1.5 text-orange-500 hover:bg-white rounded-lg transition-all">
-                                <i data-lucide="map-pin" className="w-3 h-3"></i>
-                                <span className="text-[8px] font-black uppercase tracking-tighter">Navigate</span>
-                            </button>
-                            <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                            <button onClick={() => updateField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg transition-all ${p.status === 'done' ? 'text-emerald-600 bg-white shadow-sm' : 'text-slate-400 hover:text-emerald-500'}`}>
-                                <i data-lucide="check-circle" className="w-3 h-3"></i>
-                                <span className="text-[8px] font-black uppercase tracking-tighter">{p.status === 'done' ? 'Visited' : 'Pending'}</span>
-                            </button>
-                            <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                            <button onClick={() => confirm("Remove location?") && supabaseClient.from('travel_bucket_list').delete().eq('id', p.id).then(fetchPlaces)} className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 transition-all">
-                                <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
-                            </button>
+            {/* 3. Pending Comments Block */}
+            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
+                        <i data-lucide="message-square" className="w-4 h-4"></i> Pending Comments
+                    </h2>
+                    <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
+                        {allComments.filter(c => !c.reply_text).length}
+                    </span>
+                </div>
+                <div className="space-y-4 overflow-y-auto no-scrollbar flex-1 pr-2">
+                    {allComments.filter(c => !c.reply_text).map(c => (
+                        <div key={c.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="flex justify-between items-start mb-2">
+                                <p className="text-[9px] font-black uppercase text-indigo-500 truncate">{c.travel_bucket_list?.place_name || 'General'}</p>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase">{new Date(c.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <p className="text-xs text-slate-700 font-medium italic mb-3">"{c.comment_text}"</p>
+                            <div className="flex gap-2">
+                                <input 
+                                    id={`reply-input-${c.id}`}
+                                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400"
+                                    placeholder="Type reply..."
+                                />
+                                <button 
+                                    onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} 
+                                    className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700"
+                                >
+                                    Reply
+                                </button>
+                            </div>
                         </div>
-                    ) : (
-                        <div className="h-[44px] flex items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest italic">Journal Entry Finalized</span>
-                        </div>
+                    ))}
+                    {allComments.filter(c => !c.reply_text).length === 0 && (
+                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">All caught up!</p>
                     )}
                 </div>
             </div>
-        </div>
-    );
-})}
-            </div>
+
+            {/* 4. Suggestions / Pending Approvals */}
+            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
+                        <i data-lucide="shield-alert" className="w-4 h-4"></i> Suggestions
+                    </h2>
+                    <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
+                        {pendingApprovals.length}
+                    </span>
+                </div>
+                <div className="space-y-3 overflow-y-auto no-scrollbar flex-1 pr-2">
+                    {pendingApprovals.map(a => (
+                        <div key={a.id} className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex justify-between items-center group">
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-800">{a.place_name}</p>
+                                <p className="text-[8px] font-bold text-slate-500 mt-0.5">{a.category || 'Location'}</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => handleSuggestionAction(a.id, 'approved')} 
+                                    className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform"
+                                >
+                                    Approve
+                                </button>
+                                <button 
+                                    onClick={() => handleSuggestionAction(a.id, 'rejected')} 
+                                    className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200"
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
                         </div>
+                    ))}
+                    {pendingApprovals.length === 0 && (
+                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No pending audits</p>
+                    )}
+                </div>
+            </div>
+            
+        </div>
+    </div>
+)}
                     </main>
 
-                    {showToast && (
-                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[5000] bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl animate-bounce text-[10px] font-black uppercase tracking-widest">{toastMsg}</div>
+                    {/* TOAST */}
+                    {toast.show && (
+                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[5000] bg-slate-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase shadow-2xl transition-all">
+                            {toast.msg}
+                        </div>
                     )}
                 </div>
             );
