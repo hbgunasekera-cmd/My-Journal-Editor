@@ -134,7 +134,7 @@
 const [places, setPlaces] = useState([]);
 const [visiblePlaces, setVisiblePlaces] = useState([]);
 const [filteredPlaces, setFilteredPlaces] = useState([]);
-const [userCoords, setUserCoords] = useState(null);
+const [userCoords, setUserCoords] = React.useState(null);
 const [savedRoutes, setSavedRoutes] = useState([]);
 const [pendingApprovals, setPendingApprovals] = useState([]);
 const [analyticsData, setAnalyticsData] = useState([]); 
@@ -157,7 +157,7 @@ const [stagedLocation, setStagedLocation] = useState(null);
 const mapRef = useRef(null);
 const lastRoutePoints = useRef("");
 const markersLayer = useRef(L.layerGroup());
-const routingControl = useRef(null);
+const routingControl = React.useRef(null);
 const autocompleteRef = useRef(null);
             
         React.useEffect(() => {
@@ -200,17 +200,94 @@ React.useEffect(() => {
             
             
 
-            // Handle Tab Switching specifically for Map Initialization
-            useEffect(() => {
+          useEffect(() => {
     if (activeTab === 'map') {
         setTimeout(() => {
-            initMap();
-            if (mapRef.current) mapRef.current.invalidateSize();
+            if (!mapRef.current) {
+                initMap();
+            } else {
+                mapRef.current.invalidateSize();
+            }
             updateMapMarkers();
-        }, 200);
+            if (selectedTrip.length > 0) updateMapRoute();
+        }, 300);
+    } else {
+        // --- CLEANUP LOGIC ---
+        // If we leave the map tab, kill the routing control to prevent "this._map is null"
+        if (routingControl.current) {
+            try {
+                // Remove it only if it's attached to a map
+                routingControl.current.getPlan().setWaypoints([]);
+                if (mapRef.current) {
+                    mapRef.current.removeControl(routingControl.current);
+                }
+            } catch (e) {
+                console.log("Routing cleanup suppressed");
+            }
+            routingControl.current = null;
+        }
     }
-    refreshIcons(); // Refresh icons every time the tab or data changes
+    refreshIcons();
 }, [activeTab, places, selectedTrip]);
+
+const updateMapRoute = () => {
+    if (!mapRef.current || !mapRef.current._container) return;
+    
+    const tripData = Array.isArray(selectedTrip[0]) ? selectedTrip[0] : selectedTrip;
+    
+    if (tripData.length === 0) {
+        if (routingControl.current) {
+            // Check the internal _map property to see if it's currently on the map
+            if (routingControl.current._map) {
+                mapRef.current.removeControl(routingControl.current);
+            }
+            routingControl.current = null;
+        }
+        return;
+    }
+
+    const waypoints = [];
+    if (userCoords && userCoords.lat && userCoords.lng) {
+        waypoints.push(L.latLng(parseFloat(userCoords.lat), parseFloat(userCoords.lng)));
+    }
+
+    tripData.forEach(p => {
+        if (p.latitude && p.longitude) {
+            waypoints.push(L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)));
+        }
+    });
+
+    // CHANGE: Use ._map check instead of .getMap()
+    if (routingControl.current && routingControl.current._map) {
+        routingControl.current.setWaypoints(waypoints);
+    } else {
+        // If it exists but isn't on the map, clear it to start fresh
+        if (routingControl.current) {
+            routingControl.current = null;
+        }
+
+        routingControl.current = L.Routing.control({
+            waypoints: waypoints,
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
+                profile: 'driving',
+                useHints: false 
+            }),
+            lineOptions: { 
+                styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }] 
+            },
+            createMarker: () => null,
+            addWaypoints: false,
+            draggableWaypoints: false,
+            routeWhileDragging: false,
+            show: false
+        }).addTo(mapRef.current);
+
+        routingControl.current.on('routingerror', (e) => {
+            console.error("Routing Error:", e.error.message);
+        });
+    }
+};
 
             const triggerToast = (msg) => {
                 setToast({ show: true, msg });
@@ -439,130 +516,160 @@ const deleteRoute = async (id) => {
 
 React.useEffect(() => {
     if (activeTab === 'map' && mapRef.current) {
-        // Force the map to recalculate its container size after the tab switch
+        // 1. Fix Layout: Recalculate size after the container becomes visible
         setTimeout(() => {
-            mapRef.current.invalidateSize();
+            if (mapRef.current) mapRef.current.invalidateSize();
         }, 200);
     }
+
+    // 2. Cleanup: This runs when the component unmounts OR when activeTab changes
+    return () => {
+        // We only want to clear the routing if we are moving AWAY from the map
+        // or if the component is being destroyed.
+        if (routingControl.current && mapRef.current) {
+            try {
+                // Safely remove the routing line to prevent background "this._map is null" errors
+                if (routingControl.current.getMap()) {
+                    mapRef.current.removeControl(routingControl.current);
+                }
+                routingControl.current = null;
+            } catch (e) {
+                console.log("Routing already cleaned up or map unmounted");
+            }
+        }
+    };
 }, [activeTab]);
 
+// Add this inside your App component (before the return statement)
+
 React.useEffect(() => {
-    if (activeTab !== 'map' || !mapRef.current) return;
+    let watchId = null;
 
-    // --- PART A: MARKERS (Keep these updated for status colors) ---
-    markersLayer.current.clearLayers();
-    places.forEach(p => {
-        if (!p.latitude || !p.longitude) return;
-        const isSelected = selectedTrip.some(item => item.id === p.id);
-        let markerClass = p.status === 'done' ? 'marker-done' : 'marker-pending';
-        if (isSelected) markerClass = 'marker-selected'; 
+    if ("geolocation" in navigator) {
+        watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setUserCoords(newCoords);
+                
+                // Refresh the line if a trip is active and we are looking at the map
+                if (activeTab === 'map' && selectedTrip.length > 0) {
+                    updateMapRoute();
+                }
+            },
+            (err) => {
+                console.error("Location Error:", err);
+                // Optional: triggerToast("GPS Signal Lost");
+            },
+            { 
+                enableHighAccuracy: true, 
+                timeout: 10000, 
+                maximumAge: 0 
+            }
+        );
+    } else {
+        triggerToast("Geolocation not supported by this browser");
+    }
 
-        const icon = L.divIcon({
-            className: `${markerClass} shadow-lg`,
-            iconSize: [12, 12],
-            iconAnchor: [6, 6]
-        });
-
-        L.marker([parseFloat(p.latitude), parseFloat(p.longitude)], { icon })
-            .bindPopup(`<div class="p-1 font-sans"><p class="font-black text-[10px] uppercase text-slate-800">${p.name}</p></div>`, { closeButton: false })
-            .addTo(markersLayer.current);
-    });
-
-    // --- PART B: FIXED ROUTE (The Flashing Fix) ---
-    const currentPoints = selectedTrip.map(p => `${p.latitude},${p.longitude}`).join('|');
-    
-    // ONLY update the route if the list of locations has actually changed
-    if (currentPoints === lastRoutePoints.current) return;
-    lastRoutePoints.current = currentPoints;
-
-    const routeTimeout = setTimeout(() => {
-        if (routingControl.current) {
-            try {
-                mapRef.current.removeControl(routingControl.current);
-                routingControl.current = null;
-            } catch (e) {}
-        }
-
-        const points = [];
-        if (userCoords?.lat) points.push(L.latLng(userCoords.lat, userCoords.lng));
-        selectedTrip.slice(0, 10).forEach(p => {
-            if (p.latitude && p.longitude) points.push(L.latLng(p.latitude, p.longitude));
-        });
-
-        if (points.length >= 2) {
-            routingControl.current = L.Routing.control({
-                plan: L.Routing.plan(points, { createMarker: () => null }),
-                router: L.Routing.osrmv1({ 
-                    serviceUrl: `https://router.project-osrm.org/route/v1`,
-                    profile: 'car',
-                    useHints: false 
-                }),
-                lineOptions: { 
-                    styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }], // RED Route
-                    addWaypoints: false,
-                    extendToWaypoints: false,
-                    missingRouteTolerance: 0
-                },
-                addWaypoints: false,
-                show: false
-            }).addTo(mapRef.current);
-        }
-    }, 400);
-
+    // Cleanup: Stop watching GPS when the component unmounts
     return () => {
-        clearTimeout(routeTimeout);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-}, [activeTab, selectedTrip, places]); // Removed userCoords from deps to stop flashing on GPS move
+}, [activeTab, selectedTrip]); // Dependencies ensure the route refreshes if tab or trip changes 
 
 
 // --- SHARING & QR SYSTEM ---
 
 const shareRoute = (route) => {
-    // Correct Google Maps Directions URL
-    const baseUrl = "https://www.google.com/maps/dir/";
-    const points = route.waypoints.map(id => {
-        const p = places.find(pl => pl.id === id);
-        return p ? `${p.latitude},${p.longitude}` : '';
-    }).filter(p => p !== '').join('/');
-    
-    const mapsUrl = baseUrl + points;
+    // 1. Extract coordinates directly from the waypoint objects
+    // We handle the case where waypoints might be a nested array or a flat array
+    const rawWaypoints = Array.isArray(route.waypoints[0]) ? route.waypoints[0] : route.waypoints;
 
-    const message = `*My Journal Route: ${route.route_name}*\nNavigation: ${mapsUrl}`;
+    const routeCoords = rawWaypoints.map(wp => {
+        // If it's already an object with lat/lng, use it
+        if (wp.latitude && wp.longitude) return wp;
+        
+        // Fallback: If it's just an ID, look it up in the 'places' state
+        return places.find(pl => pl.id === wp);
+    }).filter(p => p !== undefined);
+
+    if (routeCoords.length === 0) {
+        triggerToast("No valid coordinates found for this route");
+        console.error("Route Data Error:", route.waypoints);
+        return;
+    }
+
+    // 2. Construct Google Maps Directions URL
+    const origin = "Current+Location";
+    const lastPoint = routeCoords[routeCoords.length - 1];
+    const destination = `${lastPoint.latitude},${lastPoint.longitude}`;
+    
+    // Intermediate stops (all except the last one)
+    const intermediateWaypoints = routeCoords.slice(0, -1)
+        .map(p => `${p.latitude},${p.longitude}`)
+        .join('|');
+
+    // Official Google Maps Directions Format
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${intermediateWaypoints ? `&waypoints=${intermediateWaypoints}` : ''}&travelmode=driving`;
+
+    // 3. Open WhatsApp
+    const message = `*My Journal Route: ${route.route_name}*\n\nTap to Navigate:\n${mapsUrl}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 
+    // 4. Show QR Code
     showQRCode(mapsUrl, route.route_name);
 };
+
 const showQRCode = (url, name) => {
+    // Prevent duplicates
+    const existing = document.getElementById('qr-modal-overlay');
+    if (existing) existing.remove();
+
     const overlay = document.createElement('div');
-    overlay.className = "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4";
+    overlay.id = "qr-modal-overlay";
+    overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
     overlay.onclick = () => overlay.remove();
 
     const modal = document.createElement('div');
-    modal.className = "bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 max-w-xs w-full animate-in zoom-in-95 duration-200";
+    modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full animate-in zoom-in-95 duration-200 border border-slate-100";
     modal.onclick = (e) => e.stopPropagation();
 
     modal.innerHTML = `
-        <p class="text-[10px] font-black uppercase text-slate-400">Scan Travel Route</p>
-        <p class="text-[12px] font-black uppercase text-slate-800 text-center leading-tight">${name}</p>
-        <div id="qrcode-canvas" class="p-2 bg-white rounded-xl"></div>
-        <button class="mt-2 w-full py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Close</button>
+        <div class="text-center">
+            <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1 text-center">Scan to Navigate</p>
+            <h3 class="text-sm font-black uppercase text-slate-800 text-center leading-tight mb-4 px-4">${name}</h3>
+        </div>
+        
+        <div class="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 shadow-inner">
+            <div id="qrcode-canvas"></div>
+        </div>
+
+        <div class="w-full space-y-3">
+            <button id="copy-link-btn" class="w-full py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">Copy Link</button>
+            <button id="close-qr-btn" class="w-full py-3 bg-slate-100 text-slate-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors">Dismiss</button>
+        </div>
     `;
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
+    // Initialize QR Code
     new QRCode(document.getElementById("qrcode-canvas"), {
         text: url,
-        width: 200,
-        height: 200,
+        width: 220,
+        height: 220,
         colorDark: "#0f172a",
-        colorLight: "#ffffff",
+        colorLight: "#f8fafc", // Matching slate-50 background
         correctLevel: QRCode.CorrectLevel.H
     });
 
-    modal.querySelector('button').onclick = () => overlay.remove();
+    // Button Logic
+    modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
+    
+    modal.querySelector('#copy-link-btn').onclick = () => {
+        navigator.clipboard.writeText(url);
+        triggerToast("Link copied to clipboard!");
+    };
 };
-
             // --- TAB 3: DASHBOARD FUNCTIONS ---
 
 const dashboardStats = React.useMemo(() => {
