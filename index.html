@@ -21,14 +21,20 @@
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
     
-    /* --- Core Layout --- */
+    /* --- 1. CORE LAYOUT & GLOBAL RESET --- */
     body { 
         font-family: 'Plus Jakarta Sans', sans-serif; 
         background-color: #F8FAFC; 
         margin: 0; 
         padding: 0; 
         overflow: hidden; 
-        height: 100vh; 
+        height: 100vh;
+        /* Prevent text selection and hide blinking caret globally */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        caret-color: transparent;
     }
     
     #map-container { 
@@ -40,18 +46,32 @@
 
     .no-scrollbar::-webkit-scrollbar { display: none; }
     
-    /* --- Search & UI Components --- */
-    .pac-container { 
-        z-index: 10000 !important; 
-        border-radius: 1.5rem; 
-        border: none; 
-        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); 
-        padding: 0.5rem; 
-        margin-top: 5px; 
-        font-family: 'Plus Jakarta Sans', sans-serif; 
+    /* --- 2. INTERACTION & CURSOR CONTROLS --- */
+    /* Re-enable selection and cursor ONLY for actual input areas */
+    input, 
+    textarea, 
+    [contenteditable="true"],
+    .pac-target-input { 
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+        caret-color: auto !important; 
+        cursor: text !important;
     }
 
-    /* --- Leaflet & Routing Appearance --- */
+    /* Standardize Cursors */
+    #map, .sidebar-item, .category-badge { cursor: default; outline: none !important; }
+    button, a { cursor: pointer; outline: none !important; -webkit-tap-highlight-color: transparent; }
+
+    /* --- 3. MAP & LEAFLET COMPONENTS --- */
+    .leaflet-container {
+        cursor: grab !important;
+        user-select: none !important;
+        -webkit-user-select: none;
+    }
+
+    .leaflet-container:active { cursor: grabbing !important; }
     .leaflet-routing-container { display: none !important; } 
     
     .leaflet-interactive {
@@ -59,21 +79,44 @@
         stroke-linecap: round;
     }
 
-    /* --- Custom Markers --- */
-    .marker-pending { 
-        background: #f97316; 
-        border: 2px solid white; 
-        border-radius: 50%; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3); 
+    /* --- 4. POPUP & TOOLTIP STYLING --- */
+    .leaflet-popup-content-wrapper {
+        padding: 0 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        overflow: hidden;
     }
 
-    .marker-done { 
-        background: #10b981; 
-        border: 2px solid white; 
-        border-radius: 50%; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3); 
+    .leaflet-popup-content {
+        margin: 8px !important;
+        font-family: 'Plus Jakarta Sans', sans-serif;
     }
 
+    .leaflet-popup-tip-container { display: none !important; }
+    
+    .custom-map-tooltip {
+        background: rgba(15, 23, 42, 0.9) !important;
+        border: none !important;
+        border-radius: 6px !important;
+        color: white !important;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-weight: 600;
+        font-size: 11px !important;
+        padding: 4px 8px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+        white-space: nowrap;
+    }
+
+    /* Hide default tooltip arrows */
+    .leaflet-tooltip-left:before, .leaflet-tooltip-right:before,
+    .leaflet-tooltip-top:before, .leaflet-tooltip-bottom:before {
+        display: none !important;
+    }
+
+    /* --- 5. CUSTOM MARKERS & UI --- */
+    .marker-pending { background: #f97316; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .marker-done { background: #10b981; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    
     .marker-selected { 
         background: #a855f7; 
         border: 2px solid white; 
@@ -89,47 +132,17 @@
         box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3); 
     }
 
-    /* --- Popup / Tooltip Styling --- */
-    .leaflet-popup-content-wrapper {
-        padding: 0 !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-        overflow: hidden;
+    /* Google Places Autocomplete Styling */
+    .pac-container { 
+        z-index: 10000 !important; 
+        border-radius: 1.5rem; 
+        border: none; 
+        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); 
+        padding: 0.5rem; 
+        margin-top: 5px; 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
     }
-
-    .leaflet-popup-content {
-        margin: 8px !important;
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-
-    .leaflet-popup-tip-container {
-        display: none !important; 
-    }
-    
-    /* --- Tooltip Specific Styles --- */
-.custom-map-tooltip {
-    background: rgba(15, 23, 42, 0.9) !important; /* Dark Slate to contrast with map */
-    border: none !important;
-    border-radius: 6px !important;
-    color: white !important;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-weight: 600;
-    font-size: 11px !important;
-    padding: 4px 8px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
-    white-space: nowrap;
-}
-
-/* Removes the default white arrow/triangle from the tooltip */
-.leaflet-tooltip-left:before,
-.leaflet-tooltip-right:before,
-.leaflet-tooltip-top:before,
-.leaflet-tooltip-bottom:before {
-    display: none !important;
-}
-    
-    
-</style>    
+</style>
 
 
 </head>
@@ -1293,7 +1306,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                         />
                     </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 select-none">
                     {filteredPlaces.filter(p => !selectedTrip.find(t => t.id === p.id)).map(p => (
                         <div key={p.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors group">
                             <div className="flex flex-col truncate pr-2">
