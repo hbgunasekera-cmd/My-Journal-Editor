@@ -123,14 +123,14 @@
 
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
-        const EKALA = { lat: 7.0911, lng: 79.9161 };
+        
+        const HomePoint = { lat: 7.0911, lng: 79.9161 };
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);        
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
-        let globalRoutingControl = null;
-
         function App() {
-            // --- Core Data States ---
+
+// --- Core Data States ---
 const [places, setPlaces] = useState([]);
 const [visiblePlaces, setVisiblePlaces] = useState([]);
 const [filteredPlaces, setFilteredPlaces] = useState([]);
@@ -140,6 +140,7 @@ const [pendingApprovals, setPendingApprovals] = useState([]);
 const [analyticsData, setAnalyticsData] = useState([]); 
 const [allComments, setAllComments] = useState([]);
 const [likesData, setLikesData] = useState([]);
+const [manualHome, setManualHome] = React.useState(null);
 
 // --- UI & Interaction States ---
 const [activeTab, setActiveTab] = useState('places');
@@ -152,6 +153,7 @@ const [toast, setToast] = useState({ show: false, msg: '' });
 
 // --- Add Location Flow State ---
 const [stagedLocation, setStagedLocation] = useState(null);
+const [mapReady, setMapReady] = React.useState(false);
 
 // --- Refs ---
 const mapRef = useRef(null);
@@ -159,7 +161,221 @@ const lastRoutePoints = useRef("");
 const markersLayer = useRef(L.layerGroup());
 const routingControl = React.useRef(null);
 const autocompleteRef = useRef(null);
-            
+const lastDrawnCoords = React.useRef(null);
+
+
+
+React.useEffect(() => {
+    const timer = setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 50); // Small delay to let React finish rendering
+    
+    return () => clearTimeout(timer);
+}, [activeTab, selectedTrip, searchTerm,filteredPlaces, manualHome]);
+
+
+
+const Icon = ({ name, className = "w-4 h-4" }) => {
+    const iconRef = React.useRef(null);
+
+    React.useLayoutEffect(() => {
+        if (window.lucide && iconRef.current) {
+            window.lucide.createIcons({
+                nodes: [iconRef.current]
+            });
+        }
+    }, [name]);
+
+    return (
+        <i 
+            ref={iconRef} 
+            data-lucide={name} 
+            className={className}
+        ></i>
+    );
+};
+
+// --- Map Markers Effect ---
+
+React.useEffect(() => {
+    if (!mapRef.current) return;
+
+    // --- HELPER: Distance Calculator ---
+    const getDistance = (c1, c2) => {
+        if (!c1 || !c2) return 999;
+        const R = 6371e3; // meters
+        const φ1 = c1.lat * Math.PI/180;
+        const φ2 = c2.lat * Math.PI/180;
+        const Δφ = (c2.lat-c1.lat) * Math.PI/180;
+        const Δλ = (c2.lng-c1.lng) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    };
+
+    // --- CHECK: Should we redraw? ---
+    // If not in manual mode, check if we've moved significantly (>10m)
+    if (!manualHome && userCoords) {
+        const distanceMoved = getDistance(lastDrawnCoords.current, userCoords);
+        if (distanceMoved < 10 && routingControl.current) {
+            return; // Ignore small GPS jitters to stop the flashing
+        }
+        lastDrawnCoords.current = userCoords;
+    }
+
+    // --- CLEANUP ---
+    const safelyRemoveRouting = () => {
+        if (routingControl.current) {
+            try {
+                const ctrl = routingControl.current;
+                if (ctrl.getPlan()) ctrl.getPlan().setWaypoints([]);
+                if (mapRef.current && ctrl._map) {
+                    mapRef.current.removeControl(ctrl);
+                }
+            } catch (e) {
+                console.warn("Cleanup suppressed");
+            } finally {
+                routingControl.current = null;
+            }
+        }
+    };
+
+    safelyRemoveRouting();
+    if (selectedTrip.length === 0 || activeTab !== 'map') return;
+
+    // --- DRAWING ---
+    
+    const start = manualHome ? HomePoint : (userCoords ? L.latLng(userCoords.lat, userCoords.lng) : HomePoint);
+
+    const waypoints = [
+        start,
+        ...selectedTrip.map(p => L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)))
+    ];
+
+    if (waypoints.length >= 2) {
+        routingControl.current = L.Routing.control({
+            waypoints: waypoints,
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
+                profile: 'driving'
+            }),
+            lineOptions: { 
+                styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }] // Vivid Red
+            },
+            createMarker: () => null,
+            addWaypoints: false,
+            show: false 
+        }).addTo(mapRef.current);
+    }
+
+    return () => safelyRemoveRouting();
+
+}, [selectedTrip, userCoords, manualHome, activeTab]);
+
+// 1. --- STEADY ROUTING EFFECT (The Red Line) ---
+React.useEffect(() => {
+    if (!mapRef.current || activeTab !== 'map') return;
+
+    // Use HomePoint as the fallback/manual base
+    const startPoint = manualHome 
+        ? L.latLng(HomePoint.lat, HomePoint.lng) 
+        : (userCoords ? L.latLng(userCoords.lat, userCoords.lng) : L.latLng(HomePoint.lat, HomePoint.lng));
+
+    const newWaypoints = [
+        startPoint,
+        ...selectedTrip.map(p => L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)))
+    ];
+
+    // If no trip is selected, remove the line and exit
+    if (selectedTrip.length === 0) {
+        if (routingControl.current) {
+            mapRef.current.removeControl(routingControl.current);
+            routingControl.current = null;
+        }
+        return;
+    }
+
+    // STEADY UPDATE LOGIC:
+    if (routingControl.current) {
+        // Update waypoints on the existing control to prevent flashing
+        routingControl.current.setWaypoints(newWaypoints);
+    } else if (newWaypoints.length >= 2) {
+        // Create the control only if it doesn't exist
+        routingControl.current = L.Routing.control({
+            waypoints: newWaypoints,
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
+                profile: 'driving'
+            }),
+            lineOptions: {
+                styles: [{ color: '#ef4444', weight: 6, opacity: 0.85 }],
+                addWaypoints: false
+            },
+            createMarker: () => null, // Don't show default blue markers
+            addWaypoints: false,
+            show: false 
+        }).addTo(mapRef.current);
+    }
+}, [selectedTrip, userCoords, manualHome, activeTab]);
+
+
+// 2. --- MARKER MANAGER EFFECT (Dots: Orange, Green, Purple) ---
+React.useEffect(() => {
+    if (!mapRef.current || activeTab !== 'map') return;
+
+    // Clear and prepare layer
+    markersLayer.current.clearLayers();
+    if (!mapRef.current.hasLayer(markersLayer.current)) {
+        markersLayer.current.addTo(mapRef.current);
+    }
+
+    const addDot = (lat, lng, color, title, subtitle) => {
+        const parsedLat = parseFloat(lat);
+        const parsedLng = parseFloat(lng);
+        if (isNaN(parsedLat) || isNaN(parsedLng)) return;
+
+        L.circleMarker([parsedLat, parsedLng], {
+            radius: 6,
+            fillColor: color,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+        }).bindPopup(`
+            <div style="font-family: sans-serif; padding: 4px;">
+                <b style="font-size: 11px;">${title}</b><br/>
+                <span style="font-size: 9px; color: #666;">${subtitle}</span>
+            </div>
+        `).addTo(markersLayer.current);
+    };
+
+    // A. BUCKET LIST (Green for Done, Orange for Pending)
+    places.forEach(p => {
+        const color = p.status === 'done' ? '#22c55e' : '#f97316';
+        addDot(p.latitude, p.longitude, color, p.place_name || 'Destination', p.category || 'Bucket List');
+    });
+
+    // B. SAVED ROUTES WAYPOINTS (Purple)
+    savedRoutes.forEach(route => {
+        try {
+            const points = typeof route.waypoints === 'string' 
+                ? JSON.parse(route.waypoints) 
+                : route.waypoints;
+
+            points?.forEach(pt => {
+                addDot(pt.lt, pt.ln, '#a855f7', pt.n || 'Stop', 'Route Point');
+            });
+        } catch (e) {
+            console.warn("Skipping invalid route data");
+        }
+    });
+
+}, [mapReady, places, savedRoutes, activeTab]);
+
         React.useEffect(() => {
     if (navigator.geolocation) {
         const watchId = navigator.geolocation.watchPosition(
@@ -179,7 +395,7 @@ const autocompleteRef = useRef(null);
             useEffect(() => {
     refreshAllData();
     initGoogle();
-    refreshIcons(); // Add this
+    
 }, []);
 
 React.useEffect(() => {
@@ -190,104 +406,110 @@ React.useEffect(() => {
     setFilteredPlaces(places);
 }, [places]);
                 
-                const refreshIcons = () => {
-    setTimeout(() => {
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-    }, 100);
-};
+                            
             
-            
-
-          useEffect(() => {
+React.useEffect(() => {
+    // 1. HANDLE TAB SWITCHING (Disappearing Map Fix)
     if (activeTab === 'map') {
-        setTimeout(() => {
-            if (!mapRef.current) {
-                initMap();
+        const timer = setTimeout(() => {
+            if (mapRef.current) {
+                mapRef.current.invalidateSize(); // Forces Leaflet to recalculate its container
             } else {
-                mapRef.current.invalidateSize();
+                initMap();
             }
-            updateMapMarkers();
-            if (selectedTrip.length > 0) updateMapRoute();
-        }, 300);
-    } else {
-        // --- CLEANUP LOGIC ---
-        // If we leave the map tab, kill the routing control to prevent "this._map is null"
+        }, 300); 
+    }
+
+    // 2. PREVENT FLASHING (Distance Throttle)
+    
+    if (!manualHome && userCoords) {
+        const getDistance = (c1, c2) => {
+            if (!c1 || !c2) return 999;
+            const R = 6371e3;
+            const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+            const dLon = (c2.lng - c1.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(c1.lat * Math.PI/180) * Math.cos(c2.lat * Math.PI/180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        };
+
+        const distance = getDistance(lastDrawnCoords.current, userCoords);
+        if (distance < 10 && routingControl.current) return; // Skip update if movement is tiny
+        lastDrawnCoords.current = userCoords;
+    }
+
+    // 3. SAFE CLEANUP (this._map is null fix)
+    const cleanupRouting = () => {
         if (routingControl.current) {
             try {
-                // Remove it only if it's attached to a map
-                routingControl.current.getPlan().setWaypoints([]);
-                if (mapRef.current) {
-                    mapRef.current.removeControl(routingControl.current);
+                const ctrl = routingControl.current;
+                if (ctrl.getPlan()) ctrl.getPlan().setWaypoints([]);
+                if (mapRef.current && ctrl._map) {
+                    mapRef.current.removeControl(ctrl);
                 }
-            } catch (e) {
-                console.log("Routing cleanup suppressed");
-            }
+            } catch (e) { console.log("Cleanup bypassed"); }
             routingControl.current = null;
+        }
+    };
+
+    cleanupRouting();
+
+    // 4. DRAW THE RED ROUTE
+    if (activeTab === 'map' && selectedTrip.length > 0 && mapRef.current) {
+        
+        const start = manualHome ? HomePoint : (userCoords ? L.latLng(userCoords.lat, userCoords.lng) : HomePoint);
+
+        const waypoints = [
+            start,
+            ...selectedTrip.map(p => L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)))
+        ];
+
+        if (waypoints.length >= 2) {
+            routingControl.current = L.Routing.control({
+                waypoints: waypoints,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
+                    profile: 'driving'
+                }),
+                lineOptions: { 
+                    styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }]
+                },
+                createMarker: () => null,
+                addWaypoints: false,
+                show: false 
+            }).addTo(mapRef.current);
         }
     }
-    refreshIcons();
-}, [activeTab, places, selectedTrip]);
 
-const updateMapRoute = () => {
-    if (!mapRef.current || !mapRef.current._container) return;
-    
-    const tripData = Array.isArray(selectedTrip[0]) ? selectedTrip[0] : selectedTrip;
-    
-    if (tripData.length === 0) {
-        if (routingControl.current) {
-            // Check the internal _map property to see if it's currently on the map
-            if (routingControl.current._map) {
-                mapRef.current.removeControl(routingControl.current);
-            }
-            routingControl.current = null;
-        }
+    return () => cleanupRouting();
+}, [activeTab, selectedTrip, userCoords, manualHome]);
+
+React.useEffect(() => {
+    // 1. If search is empty, show everything and exit
+    if (!searchTerm) {
+        setFilteredPlaces(places);
         return;
     }
 
-    const waypoints = [];
-    if (userCoords && userCoords.lat && userCoords.lng) {
-        waypoints.push(L.latLng(parseFloat(userCoords.lat), parseFloat(userCoords.lng)));
-    }
+    const lowerSearch = searchTerm.toLowerCase();
 
-    tripData.forEach(p => {
-        if (p.latitude && p.longitude) {
-            waypoints.push(L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)));
-        }
+    // 2. Filter with defensive checks for missing names or categories
+    const filtered = places.filter(p => {
+        // Safe access: If p.place_name is missing, use an empty string instead of crashing
+        const name = p?.place_name ? String(p.place_name).toLowerCase() : "";
+        const category = p?.category ? String(p.category).toLowerCase() : "";
+        
+        // 3. Match against either the name OR the category
+        return name.includes(lowerSearch) || category.includes(lowerSearch);
     });
 
-    // CHANGE: Use ._map check instead of .getMap()
-    if (routingControl.current && routingControl.current._map) {
-        routingControl.current.setWaypoints(waypoints);
-    } else {
-        // If it exists but isn't on the map, clear it to start fresh
-        if (routingControl.current) {
-            routingControl.current = null;
-        }
+    setFilteredPlaces(filtered);
+}, [searchTerm, places]);
 
-        routingControl.current = L.Routing.control({
-            waypoints: waypoints,
-            router: L.Routing.osrmv1({
-                serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
-                profile: 'driving',
-                useHints: false 
-            }),
-            lineOptions: { 
-                styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }] 
-            },
-            createMarker: () => null,
-            addWaypoints: false,
-            draggableWaypoints: false,
-            routeWhileDragging: false,
-            show: false
-        }).addTo(mapRef.current);
 
-        routingControl.current.on('routingerror', (e) => {
-            console.error("Routing Error:", e.error.message);
-        });
-    }
-};
+
+
 
             const triggerToast = (msg) => {
                 setToast({ show: true, msg });
@@ -336,8 +558,8 @@ const updateMapRoute = () => {
             const saveStagedLocation = async () => {
     if (!stagedLocation) return;
 
-    // Use live user coordinates if available; otherwise, fall back to EKALA
-    const referencePoint = userCoords || EKALA;
+    // Use live user coordinates if available; otherwise, fall back to HomePoint
+    const referencePoint = userCoords || HomePoint;
 
     // Calculate distance in KM based on the reference point
     const dist = (L.latLng(referencePoint.lat, referencePoint.lng)
@@ -406,21 +628,33 @@ const updateMapRoute = () => {
 // --- STABLE MAP INITIALIZATION ---
 const initMap = () => {
     if (mapRef.current) return;
-    const container = document.getElementById('map-container');
-    if (!container) return;
     
-    // Create Map
-    const map = L.map('map-container', { 
-        zoomControl: false, 
-        attributionControl: false 
-    }).setView([7.8731, 80.7718], 8);
+    // Initialize the map
+    const map = L.map('map-container').setView([7.8731, 80.7718], 8); // Centered on Sri Lanka
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // Attach the markers layer group immediately
     markersLayer.current.addTo(map);
     
     mapRef.current = map;
 };
 
+const toggleHomeMode = () => {
+    if (manualHome) {
+        // If currently Manual, switch back to GPS (or Fallback if GPS off)
+        setManualHome(null);
+        triggerToast("Switched to Device GPS");
+    } else {
+        // If currently GPS/Fallback, set Manual to the current map center
+        const center = mapRef.current.getCenter();
+        setManualHome({ lat: center.lat, lng: center.lng });
+        triggerToast("Switched to Manual Start (Map Center)");
+    }
+    // updateMapRoute() will be triggered by the state change
+};
 const updateMapMarkers = () => {
     if (!mapRef.current || !markersLayer.current) return;
     
@@ -468,39 +702,78 @@ const updateMapMarkers = () => {
 };
 
 const calculateRouteDistance = () => {
-    if (selectedTrip.length === 0) return 0;
-    let totalMeters = 0;
+    // 1. Identify the starting point using the same priority as the map
+    let startPoint = null;
 
-    // 1. Leg: Current GPS Location to the FIRST stop
-    if (userCoords) {
-        const start = L.latLng(userCoords.lat, userCoords.lng);
-        const firstStop = L.latLng(selectedTrip[0].latitude, selectedTrip[0].longitude);
-        totalMeters += start.distanceTo(firstStop);
+    if (manualHome) {
+        startPoint = L.latLng(manualHome.lat, manualHome.lng);
+    } else if (userCoords && userCoords.lat && userCoords.lng) {
+        startPoint = L.latLng(parseFloat(userCoords.lat), parseFloat(userCoords.lng));
+    } else {
+        // Fallback to HomePoint
+        startPoint = L.latLng(7.0911, 79.9161);
     }
 
-    // 2. Legs: Between all stops in the Active Plan
-    for (let i = 0; i < selectedTrip.length - 1; i++) {
-        const from = L.latLng(selectedTrip[i].latitude, selectedTrip[i].longitude);
-        const to = L.latLng(selectedTrip[i+1].latitude, selectedTrip[i+1].longitude);
-        totalMeters += from.distanceTo(to);
-    }
+    // 2. Safety check: If for some reason startPoint is still null, return 0
+    if (!startPoint) return "0.0";
 
-    return (totalMeters / 1000).toFixed(1); // Result in Kilometers
+    const tripData = Array.isArray(selectedTrip[0]) ? selectedTrip[0] : selectedTrip;
+    let totalDistance = 0;
+    let currentPos = startPoint;
+
+    // 3. Calculate cumulative distance
+    tripData.forEach((point) => {
+        if (point.latitude && point.longitude) {
+            const destination = L.latLng(parseFloat(point.latitude), parseFloat(point.longitude));
+            // distanceTo returns meters, so we divide by 1000 for KM
+            totalDistance += currentPos.distanceTo(destination) / 1000;
+            currentPos = destination;
+        }
+    });
+
+    return totalDistance.toFixed(1);
 };
 
 const handleSaveRoute = async () => {
-    if (selectedTrip.length < 2) return triggerToast("Add at least 2 locations");
-    const name = prompt("Enter Route Name:");
-    if (!name) return;
+    // 1. Validation: Need at least 2 points
+    if (selectedTrip.length < 2) {
+        return alert("Select at least 2 locations to save a route.");
+    }
+
+    // 2. Prompt for name (using last destination as default)
+    const defaultName = `Trip to ${selectedTrip[selectedTrip.length - 1].place_name}`;
+    const routeName = prompt("Enter a name for this route plan:", defaultName);
+    if (!routeName) return;
+
+    // 3. Duplicate check
+    const isNameDuplicate = savedRoutes.some(r => 
+        r.route_name.toLowerCase() === routeName.toLowerCase()
+    );
+    if (isNameDuplicate) return alert("A route plan with this name already exists!");
+
+    // 4. Prepare portable data (Google Maps Style)
+    const waypointsData = selectedTrip.map(p => ({
+        n: p.place_name,
+        lt: p.latitude,
+        ln: p.longitude
+    }));
+
+    // 5. Insert to the database
     
-    const { error } = await supabaseClient.from('saved_travel_routes').insert([{
-        route_name: name,
-        waypoints: selectedTrip.map(p => p.id)
-    }]);
-    
-    if (!error) { 
-        triggerToast('Route Saved'); 
-        refreshAllData(); 
+    const { error } = await supabaseClient
+        .from('saved_travel_routes') 
+        .insert([{ 
+            route_name: routeName, 
+            waypoints: JSON.stringify(waypointsData)
+        }]);
+
+    if (error) {
+        console.error("Save Error:", error.message);
+        triggerToast(`Save failed: ${error.message}`);
+    } else {
+        // Refresh the list after saving
+        if (typeof fetchSavedRoutes === 'function') fetchSavedRoutes();
+        triggerToast('Route Saved Successfully');
     }
 };
 
@@ -515,108 +788,68 @@ const deleteRoute = async (id) => {
 };
 
 React.useEffect(() => {
-    if (activeTab === 'map' && mapRef.current) {
-        // 1. Fix Layout: Recalculate size after the container becomes visible
-        setTimeout(() => {
-            if (mapRef.current) mapRef.current.invalidateSize();
-        }, 200);
-    }
+    if (activeTab === 'map') {
+        const timer = setTimeout(() => {
+            if (!mapRef.current) {
+                // Initialize the map
+                const map = L.map('map-container', {
+                    zoomControl: false,
+                    attributionControl: false
+                }).setView([HomePoint.lat, HomePoint.lng], 8);
 
-    // 2. Cleanup: This runs when the component unmounts OR when activeTab changes
-    return () => {
-        // We only want to clear the routing if we are moving AWAY from the map
-        // or if the component is being destroyed.
-        if (routingControl.current && mapRef.current) {
-            try {
-                // Safely remove the routing line to prevent background "this._map is null" errors
-                if (routingControl.current.getMap()) {
-                    mapRef.current.removeControl(routingControl.current);
-                }
-                routingControl.current = null;
-            } catch (e) {
-                console.log("Routing already cleaned up or map unmounted");
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                
+                // Attach the layer group
+                markersLayer.current.addTo(map);
+                mapRef.current = map;
+                
+                // CRITICAL: Signal that markers can now be drawn
+                setMapReady(true);
+            } else {
+                mapRef.current.invalidateSize();
+                // Ensure markers are refreshed on tab switch
+                setMapReady(prev => !prev); 
             }
-        }
-    };
+        }, 150); // Increased delay for stability
+        return () => clearTimeout(timer);
+    } else {
+        setMapReady(false);
+    }
 }, [activeTab]);
 
-// Add this inside your App component (before the return statement)
 
 React.useEffect(() => {
     let watchId = null;
-
     if ("geolocation" in navigator) {
-        watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                setUserCoords(newCoords);
-                
-                // Refresh the line if a trip is active and we are looking at the map
-                if (activeTab === 'map' && selectedTrip.length > 0) {
-                    updateMapRoute();
-                }
-            },
-            (err) => {
-                console.error("Location Error:", err);
-                // Optional: triggerToast("GPS Signal Lost");
-            },
-            { 
-                enableHighAccuracy: true, 
-                timeout: 10000, 
-                maximumAge: 0 
-            }
-        );
-    } else {
-        triggerToast("Geolocation not supported by this browser");
+        watchId = navigator.geolocation.watchPosition((pos) => {
+            setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            // Notice: No refreshIcons() or updateMapRoute() here!
+            // React state changes handle the updates automatically now.
+        }, (err) => console.error(err), { enableHighAccuracy: true });
     }
-
-    // Cleanup: Stop watching GPS when the component unmounts
-    return () => {
-        if (watchId) navigator.geolocation.clearWatch(watchId);
-    };
-}, [activeTab, selectedTrip]); // Dependencies ensure the route refreshes if tab or trip changes 
+    return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
+}, []);
 
 
 // --- SHARING & QR SYSTEM ---
 
 const shareRoute = (route) => {
-    // 1. Extract coordinates directly from the waypoint objects
-    // We handle the case where waypoints might be a nested array or a flat array
-    const rawWaypoints = Array.isArray(route.waypoints[0]) ? route.waypoints[0] : route.waypoints;
+    const pts = JSON.parse(route.waypoints);
+    if (!pts || pts.length < 2) return;
 
-    const routeCoords = rawWaypoints.map(wp => {
-        // If it's already an object with lat/lng, use it
-        if (wp.latitude && wp.longitude) return wp;
-        
-        // Fallback: If it's just an ID, look it up in the 'places' state
-        return places.find(pl => pl.id === wp);
-    }).filter(p => p !== undefined);
+    // Start point
+    const origin = `${pts[0].lt},${pts[0].ln}`;
+    // Destination (the last point)
+    const destination = `${pts[pts.length - 1].lt},${pts[pts.length - 1].ln}`;
+    // Everything in between
+    const waypoints = pts.slice(1, -1).map(p => `${p.lt},${p.ln}`).join('|');
 
-    if (routeCoords.length === 0) {
-        triggerToast("No valid coordinates found for this route");
-        console.error("Route Data Error:", route.waypoints);
-        return;
-    }
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
 
-    // 2. Construct Google Maps Directions URL
-    const origin = "Current+Location";
-    const lastPoint = routeCoords[routeCoords.length - 1];
-    const destination = `${lastPoint.latitude},${lastPoint.longitude}`;
-    
-    // Intermediate stops (all except the last one)
-    const intermediateWaypoints = routeCoords.slice(0, -1)
-        .map(p => `${p.latitude},${p.longitude}`)
-        .join('|');
-
-    // Official Google Maps Directions Format
-    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${intermediateWaypoints ? `&waypoints=${intermediateWaypoints}` : ''}&travelmode=driving`;
-
-    // 3. Open WhatsApp
-    const message = `*My Journal Route: ${route.route_name}*\n\nTap to Navigate:\n${mapsUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-
-    // 4. Show QR Code
-    showQRCode(mapsUrl, route.route_name);
+    // Copy to clipboard or open
+    navigator.clipboard.writeText(googleMapsUrl);
+    triggerToast("Google Maps Link Copied!");
+    window.open(googleMapsUrl, '_blank');
 };
 
 const showQRCode = (url, name) => {
@@ -834,7 +1067,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                             <div className="relative flex items-center gap-2">
     {/* 1. Location Name Search */}
     <div className="relative flex items-center">
-        <i data-lucide="search" className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none"></i>
+        <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
         <input 
             ref={autocompleteRef} 
             placeholder="Search Google Maps..." 
@@ -991,12 +1224,11 @@ const handleSuggestionAction = async (suggestionId, action) => {
                         )}
 
                         {/* TAB 2: MAP */}
-                        {activeTab === 'map' && (
+{activeTab === 'map' && (
     <div className="flex h-full">
-        {/* Sidebar: Planner & Locations */}
         <aside className="w-80 border-r border-slate-100 flex flex-col bg-white overflow-hidden shadow-2xl z-[1000]">
             
-            {/* 1. Saved Route Plans (Consolidated Scrollable List) */}
+            {/* 1. Saved Route Plans */}
             <div className="p-4 border-b border-slate-100 bg-slate-50/30">
                 <div className="flex justify-between items-center mb-3">
                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saved Route Plans</p>
@@ -1008,7 +1240,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                             if (routingControl.current) mapRef.current.removeControl(routingControl.current);
                             triggerToast('View Reset');
                         }}
-                        className="text-[8px] font-black uppercase text-rose-500 hover:text-rose-600 transition-colors"
+                        className="text-[8px] font-black uppercase text-rose-500 hover:text-rose-600"
                     >
                         Reset All
                     </button>
@@ -1018,179 +1250,169 @@ const handleSuggestionAction = async (suggestionId, action) => {
     {savedRoutes.length === 0 ? (
         <p className="text-[10px] text-slate-300 italic py-4 text-center border border-dashed border-slate-200 rounded-xl uppercase font-bold">No saved routes</p>
     ) : (
-        savedRoutes.map((route) => (
-            <div 
-    key={route.id} 
-    className="p-2.5 bg-white border border-slate-100 rounded-xl shadow-sm hover:border-emerald-200 transition-all group"
->
-    <div 
-        onClick={() => {
-            // 1. DATA PARSING: Handle if waypoints is a string or already an array
+        savedRoutes.map((route) => {
+            // FIX: Parse wpArray here so it is accessible to both the badge and the onClick handler
             let wpArray = [];
             try {
                 wpArray = typeof route.waypoints === 'string' 
                     ? JSON.parse(route.waypoints) 
                     : (route.waypoints || []);
             } catch (e) {
-                console.error("Failed to parse waypoints", e);
-                return triggerToast("Error: Invalid route data format");
+                wpArray = [];
             }
 
-            // 2. DIRECT MAPPING: Use the data already in the waypoints
-            // No need to search the 'places' array because the objects are here!
-            if (wpArray.length > 0) {
-                // Ensure field names match what your app expects (e.g., place_name vs name)
-                const mappedPlaces = wpArray.map(wp => ({
-                    ...wp,
-                    // If your UI uses 'name' but the DB uses 'place_name', sync them here:
-                    name: wp.place_name || wp.name 
-                }));
+            return (
+                <div key={route.id} className="p-2.5 bg-white border border-slate-100 rounded-xl shadow-sm hover:border-emerald-200 transition-all group">
+                    <div 
+                        onClick={() => {
+                            if (wpArray.length > 0) {
+                                const enrichedPlaces = wpArray.map(wp => {
+                                    // 1. Handle simple UUID format (strings)
+                                    if (typeof wp === 'string') {
+                                        const match = places.find(p => p.id === wp);
+                                        return match ? match : { id: wp, place_name: "Unknown Stop" };
+                                    }
+                                    
+                                    // 2. Handle new Portable format {n: name, lt: lat, ln: lng}
+                                    if (wp.lt && wp.ln) {
+                                        return {
+                                            id: Math.random(), // Unique key for React
+                                            place_name: wp.n || "Saved Stop",
+                                            latitude: wp.lt,
+                                            longitude: wp.ln,
+                                            category: "Saved Route"
+                                        };
+                                    }
+                                    
+                                    // 3. Fallback for old object format
+                                    const match = places.find(p => p.id === wp.id);
+                                    return match ? match : { ...wp, place_name: wp.place_name || wp.name || "Unknown Stop" };
+                                });
 
-                // 3. UI SYNC: Update the Active Plan list and Map
-                setFilteredPlaces(mappedPlaces);
-                setSelectedTrip(mappedPlaces); 
-                setActiveTab('map'); 
-                
-                triggerToast(`Loaded: ${route.route_name}`);
-            } else {
-                triggerToast("Error: This route has no saved locations");
-            }
-        }} 
-        className="cursor-pointer"
-    >
-        <div className="flex justify-between items-start">
-            <p className="text-[10px] font-black uppercase text-slate-700 group-hover:text-emerald-600 transition-colors">
-                {route.route_name}
-            </p>
-            <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-1 py-0.5 rounded uppercase">
-                {Array.isArray(route.waypoints) ? route.waypoints.length : 0} Pts
-            </span>
-        </div>
-        <p className="text-[7px] font-bold text-slate-400 uppercase mt-1">Tap to load route</p>
-    </div>
-    
-    {/* Action Buttons (Share/Delete) */}
-    <div className="flex gap-1.5 mt-2">
-        <button onClick={(e) => { e.stopPropagation(); shareRoute(route); }} className="flex-1 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase border border-emerald-100">Share</button>
-        <button onClick={(e) => { e.stopPropagation(); deleteRoute(route.id); }} className="flex-1 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase border border-rose-100">Delete</button>
-    </div>
-</div>
-        ))
+                                setSelectedTrip(enrichedPlaces);
+                                setActiveTab('map'); // Ensure user sees the route on the map
+                                triggerToast(`Loaded: ${route.route_name}`);
+                            }
+                        }} 
+                        className="cursor-pointer"
+                    >
+                        <div className="flex justify-between items-start">
+                            <p className="text-[10px] font-black uppercase text-slate-700 group-hover:text-emerald-600">
+                                {route.route_name}
+                            </p>
+                            {/* wpArray is now defined and safe to use here */}
+                            <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-1 py-0.5 rounded uppercase">
+                                {wpArray.length} Pts
+                            </span>
+                        </div>
+                        <p className="text-[7px] font-bold text-slate-400 uppercase mt-1">Tap to load route</p>
+                    </div>
+                    
+                    <div className="flex gap-1.5 mt-2">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); shareRoute(route); }} 
+                            className="flex-1 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase border border-emerald-100 hover:bg-emerald-100"
+                        >
+                            Share
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); deleteRoute(route.id); }} 
+                            className="flex-1 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase border border-rose-100 hover:bg-rose-100"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            );
+        })
     )}
 </div>
             </div>
 
-            {/* 2. Active Trip Planner - Consolidated with Logic Fixes */}
-<div className="p-4 border-b border-slate-100 bg-indigo-50/30">
-    <div className="flex justify-between items-end mb-3">
-        <div>
-            <div className="flex items-center gap-2">
-                <p className="text-[10px] font-black uppercase text-indigo-700">Active Plan ({selectedTrip.length})</p>
-                {/* Visual Indicator of GPS Anchor */}
-                {userCoords && selectedTrip.length > 0 && (
-                    <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" title="Live GPS Connected"></span>
-                )}
-            </div>
-            {/* Real-time distance including the drive from your current location */}
-            <p className="text-[8px] font-bold uppercase text-slate-500 mt-1 tracking-tighter">
-                {selectedTrip.length > 0 
-                    ? `Est. Journey: ${calculateRouteDistance()} KM` 
-                    : "Select a route or add locations"}
-            </p>
-        </div>
-        
-        <div className="flex gap-2">
-            {/* Clear Button: Returns to "Discovery" mode */}
-            {selectedTrip.length > 0 && (
-                <button 
-                    onClick={() => {
-                        setSelectedTrip([]);
-                        setFilteredPlaces(places);
-                        triggerToast("Plan Cleared");
-                    }}
-                    className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase active:scale-95 transition-all"
-                >
-                    Clear
-                </button>
-            )}
-            
-            <button 
-                onClick={handleSaveRoute} 
-                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
-                disabled={selectedTrip.length < 2}
-            >
-                Save Plan
-            </button>
-        </div>
-    </div>
-
-    {/* Scrollable Location List */}
-    <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar">
-        {selectedTrip.length === 0 ? (
-            <div className="py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center opacity-40">
-                <i data-lucide="map-pin" className="w-4 h-4 text-slate-400 mb-1"></i>
-                <p className="text-[7px] font-black uppercase text-slate-400">Your trip is empty</p>
-            </div>
-        ) : (
-            selectedTrip.map((t, idx) => (
-                <div key={`${t.id}-${idx}`} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-indigo-100 shadow-sm group animate-in slide-in-from-right-2 duration-200">
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-black uppercase truncate pr-2 text-slate-800">
-                            {idx + 1}. {t.place_name}
-                        </span>
-                        {/* Sub-label for context */}
-                        <span className="text-[7px] font-bold text-indigo-400 uppercase">
-                            {idx === 0 ? "First Stop" : "Next Destination"}
-                        </span>
+            {/* 2. Active Trip Planner */}
+            <div className="p-4 border-b border-slate-100 bg-indigo-50/30">
+                <div className="flex justify-between items-end mb-3">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-black uppercase text-indigo-700">Active Plan ({selectedTrip.length})</p>
+                            {selectedTrip.length > 0 && (
+                                <button onClick={() => setManualHome(manualHome ? null : {lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng})} className="transition-all active:scale-90">
+                                    {manualHome ? (
+                                        <div className="flex items-center gap-1 bg-rose-100 px-1.5 py-0.5 rounded-full border border-rose-200">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                            <span className="text-[7px] font-black text-rose-600 uppercase">Manual</span>
+                                            <i data-lucide="mouse-pointer-click" className="w-2 h-2 text-rose-400 ml-0.5"></i>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1 bg-emerald-100 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            <span className="text-[7px] font-black text-emerald-600 uppercase">GPS</span>
+                                        </div>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                        <p className="text-[8px] font-bold uppercase text-slate-500 mt-1 tracking-tighter">
+                            {selectedTrip.length > 0 ? `Est. Journey: ${calculateRouteDistance()} KM` : "Empty Plan"}
+                        </p>
                     </div>
-                    
-                    <button 
-                        onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} 
-                        className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                    >
-                        <i data-lucide="x" className="w-3 h-3"></i>
-                    </button>
+                    <div className="flex gap-2">
+                        {selectedTrip.length > 0 && (
+                            <button onClick={() => { setSelectedTrip([]); setFilteredPlaces(places); }} className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase">Clear</button>
+                        )}
+                        <button onClick={handleSaveRoute} disabled={selectedTrip.length < 2} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase disabled:opacity-50">Save Plan</button>
+                    </div>
                 </div>
-            ))
-        )}
-    </div>
-</div>
 
-            {/* 3. Available Locations (With Search) */}
+                <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar">
+                    {selectedTrip.map((t, idx) => (
+                        <div key={`${t.id}-${idx}`} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-indigo-100 shadow-sm group">
+                            <div className="flex flex-col truncate pr-2">
+                                <span className="text-[9px] font-black uppercase truncate text-slate-800">
+                                    {idx + 1}. {t.place_name || "Unknown Location"}
+                                </span>
+                                <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
+                            </div>
+                            <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="p-1 text-slate-300 hover:text-rose-500">
+                                <i data-lucide="trash-2" className="w-3 h-3"></i>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* 3. Available Locations */}
             <div className="flex-1 flex flex-col min-h-0 bg-white">
                 <div className="p-4 bg-white border-b border-slate-50">
                     <div className="relative">
                         <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
                         <input 
-                            type="text"
-                            placeholder="Search locations..."
-                            value={searchTerm}
+                            type="text" 
+                            placeholder="Search locations..." 
+                            value={searchTerm} 
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold uppercase outline-none focus:border-emerald-400 transition-all"
+                            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold uppercase outline-none focus:border-emerald-400"
                         />
                     </div>
                 </div>
-                
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-                    {(filteredPlaces.length > 0 ? filteredPlaces : places)
-                        .filter(p => p.place_name.toLowerCase().includes(searchTerm.toLowerCase()))
-                        .filter(p => !selectedTrip.find(t => t.id === p.id))
-                        .map(p => (
-                            <div key={p.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors group">
-                                <span className="text-[9px] font-bold uppercase truncate text-slate-600 group-hover:text-slate-900">{p.place_name}</span>
-                                <button onClick={() => setSelectedTrip([...selectedTrip, p])} className="text-emerald-500 hover:bg-emerald-50 p-1 rounded-md transition-all">
-                                    <i data-lucide="plus-circle" className="w-3.5 h-3.5"></i>
-                                </button>
+                    {filteredPlaces.filter(p => !selectedTrip.find(t => t.id === p.id)).map(p => (
+                        <div key={p.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors group">
+                            <div className="flex flex-col truncate pr-2">
+                                <span className="text-[9px] font-black uppercase truncate text-slate-600 group-hover:text-slate-900">{p.place_name}</span>
+                                <span className="text-[7px] font-bold uppercase text-slate-400">{p.category}</span>
                             </div>
-                        ))}
+                            <button onClick={() => { setSelectedTrip([...selectedTrip, p]); triggerToast(`Added ${p.place_name}`); }} className="text-emerald-500 hover:bg-emerald-50 p-1.5 rounded-lg transition-all active:scale-90">
+                                <i data-lucide="plus-circle" className="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    ))}
                 </div>
             </div>
         </aside>
 
-        {/* Map Display */}
         <section className="flex-1 relative bg-slate-100">
             <div id="map-container" className="w-full h-full"></div>
-            {/* Legend or Map controls can go here */}
         </section>
     </div>
 )}
