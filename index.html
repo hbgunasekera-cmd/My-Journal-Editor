@@ -105,6 +105,30 @@
     .leaflet-popup-tip-container {
         display: none !important; 
     }
+    
+    /* --- Tooltip Specific Styles --- */
+.custom-map-tooltip {
+    background: rgba(15, 23, 42, 0.9) !important; /* Dark Slate to contrast with map */
+    border: none !important;
+    border-radius: 6px !important;
+    color: white !important;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+    white-space: nowrap;
+}
+
+/* Removes the default white arrow/triangle from the tooltip */
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before,
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before {
+    display: none !important;
+}
+    
+    
 </style>    
 
 
@@ -162,135 +186,67 @@ const markersLayer = useRef(L.layerGroup());
 const routingControl = React.useRef(null);
 const autocompleteRef = useRef(null);
 const lastDrawnCoords = React.useRef(null);
+const [qrUrl, setQrUrl] = React.useState('');
 
-
-
-React.useEffect(() => {
-    const timer = setTimeout(() => {
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-    }, 50); // Small delay to let React finish rendering
-    
-    return () => clearTimeout(timer);
-}, [activeTab, selectedTrip, searchTerm,filteredPlaces, manualHome]);
-
-
-
+// --- 1. ICON SYSTEM ---
 const Icon = ({ name, className = "w-4 h-4" }) => {
     const iconRef = React.useRef(null);
-
     React.useLayoutEffect(() => {
         if (window.lucide && iconRef.current) {
-            window.lucide.createIcons({
-                nodes: [iconRef.current]
-            });
+            window.lucide.createIcons({ nodes: [iconRef.current] });
         }
     }, [name]);
-
-    return (
-        <i 
-            ref={iconRef} 
-            data-lucide={name} 
-            className={className}
-        ></i>
-    );
+    return <i ref={iconRef} data-lucide={name} className={className}></i>;
 };
 
-// --- Map Markers Effect ---
-
+// Global Lucide refresh for dynamic content
 React.useEffect(() => {
-    if (!mapRef.current) return;
+    const timer = setTimeout(() => {
+        if (window.lucide) window.lucide.createIcons();
+    }, 100);
+    return () => clearTimeout(timer);
+}, [activeTab, selectedTrip, searchTerm, filteredPlaces]);
 
-    // --- HELPER: Distance Calculator ---
+
+// --- 2. GPS & DATA INITIALIZATION ---
+React.useEffect(() => {
+    refreshAllData();
+    initGoogle();
+
+    if (navigator.geolocation) {
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            (err) => console.error("GPS Error:", err),
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+        return () => navigator.geolocation.clearWatch(watchId);
+    }
+}, []);
+
+
+// --- 3. STEADY ROUTING EFFECT (No More Blinking) ---
+React.useEffect(() => {
+    if (!mapRef.current || activeTab !== 'map') return;
+
+    // Helper: Distance Calculator for Throttling
     const getDistance = (c1, c2) => {
         if (!c1 || !c2) return 999;
-        const R = 6371e3; // meters
-        const φ1 = c1.lat * Math.PI/180;
-        const φ2 = c2.lat * Math.PI/180;
-        const Δφ = (c2.lat-c1.lat) * Math.PI/180;
-        const Δλ = (c2.lng-c1.lng) * Math.PI/180;
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
+        const R = 6371e3;
+        const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+        const dLon = (c2.lng - c1.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(c1.lat * Math.PI/180) * Math.cos(c2.lat * Math.PI/180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     };
 
-    // --- CHECK: Should we redraw? ---
-    // If not in manual mode, check if we've moved significantly (>10m)
-    if (!manualHome && userCoords) {
-        const distanceMoved = getDistance(lastDrawnCoords.current, userCoords);
-        if (distanceMoved < 10 && routingControl.current) {
-            return; // Ignore small GPS jitters to stop the flashing
-        }
-        lastDrawnCoords.current = userCoords;
-    }
-
-    // --- CLEANUP ---
-    const safelyRemoveRouting = () => {
-        if (routingControl.current) {
-            try {
-                const ctrl = routingControl.current;
-                if (ctrl.getPlan()) ctrl.getPlan().setWaypoints([]);
-                if (mapRef.current && ctrl._map) {
-                    mapRef.current.removeControl(ctrl);
-                }
-            } catch (e) {
-                console.warn("Cleanup suppressed");
-            } finally {
-                routingControl.current = null;
-            }
-        }
-    };
-
-    safelyRemoveRouting();
-    if (selectedTrip.length === 0 || activeTab !== 'map') return;
-
-    // --- DRAWING ---
-    
     const start = manualHome ? HomePoint : (userCoords ? L.latLng(userCoords.lat, userCoords.lng) : HomePoint);
-
-    const waypoints = [
+    const newWaypoints = [
         start,
         ...selectedTrip.map(p => L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)))
     ];
 
-    if (waypoints.length >= 2) {
-        routingControl.current = L.Routing.control({
-            waypoints: waypoints,
-            router: L.Routing.osrmv1({
-                serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
-                profile: 'driving'
-            }),
-            lineOptions: { 
-                styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }] // Vivid Red
-            },
-            createMarker: () => null,
-            addWaypoints: false,
-            show: false 
-        }).addTo(mapRef.current);
-    }
-
-    return () => safelyRemoveRouting();
-
-}, [selectedTrip, userCoords, manualHome, activeTab]);
-
-// 1. --- STEADY ROUTING EFFECT (The Red Line) ---
-React.useEffect(() => {
-    if (!mapRef.current || activeTab !== 'map') return;
-
-    // Use HomePoint as the fallback/manual base
-    const startPoint = manualHome 
-        ? L.latLng(HomePoint.lat, HomePoint.lng) 
-        : (userCoords ? L.latLng(userCoords.lat, userCoords.lng) : L.latLng(HomePoint.lat, HomePoint.lng));
-
-    const newWaypoints = [
-        startPoint,
-        ...selectedTrip.map(p => L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)))
-    ];
-
-    // If no trip is selected, remove the line and exit
+    // Handle Route Removal
     if (selectedTrip.length === 0) {
         if (routingControl.current) {
             mapRef.current.removeControl(routingControl.current);
@@ -299,216 +255,111 @@ React.useEffect(() => {
         return;
     }
 
-    // STEADY UPDATE LOGIC:
+    // STEADY UPDATE LOGIC
     if (routingControl.current) {
-        // Update waypoints on the existing control to prevent flashing
-        routingControl.current.setWaypoints(newWaypoints);
+        const distanceMoved = getDistance(lastDrawnCoords.current, start);
+        const tripChanged = lastRoutePoints.current !== JSON.stringify(selectedTrip);
+
+        if (distanceMoved > 10 || tripChanged) {
+            routingControl.current.setWaypoints(newWaypoints);
+            lastDrawnCoords.current = start;
+            lastRoutePoints.current = JSON.stringify(selectedTrip);
+        }
     } else if (newWaypoints.length >= 2) {
-        // Create the control only if it doesn't exist
         routingControl.current = L.Routing.control({
             waypoints: newWaypoints,
             router: L.Routing.osrmv1({
                 serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
                 profile: 'driving'
             }),
-            lineOptions: {
-                styles: [{ color: '#ef4444', weight: 6, opacity: 0.85 }],
-                addWaypoints: false
-            },
-            createMarker: () => null, // Don't show default blue markers
+            lineOptions: { styles: [{ color: '#ef4444', weight: 6, opacity: 0.85 }], addWaypoints: false },
+            createMarker: () => null,
             addWaypoints: false,
             show: false 
         }).addTo(mapRef.current);
+        
+        lastDrawnCoords.current = start;
+        lastRoutePoints.current = JSON.stringify(selectedTrip);
     }
 }, [selectedTrip, userCoords, manualHome, activeTab]);
 
 
-// 2. --- MARKER MANAGER EFFECT (Dots: Orange, Green, Purple) ---
+// --- 4. MARKER MANAGER EFFECT ---
 React.useEffect(() => {
     if (!mapRef.current || activeTab !== 'map') return;
 
-    // Clear and prepare layer
+    // Disappearing Map Fix (Container Resize)
+    const resizeTimer = setTimeout(() => mapRef.current.invalidateSize(), 300);
+
     markersLayer.current.clearLayers();
     if (!mapRef.current.hasLayer(markersLayer.current)) {
         markersLayer.current.addTo(mapRef.current);
     }
 
     const addDot = (lat, lng, color, title, subtitle) => {
-        const parsedLat = parseFloat(lat);
-        const parsedLng = parseFloat(lng);
-        if (isNaN(parsedLat) || isNaN(parsedLng)) return;
+    const pLat = parseFloat(lat);
+    const pLng = parseFloat(lng);
+    if (isNaN(pLat) || isNaN(pLng)) return;
 
-        L.circleMarker([parsedLat, parsedLng], {
-            radius: 6,
-            fillColor: color,
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.9
-        }).bindPopup(`
-            <div style="font-family: sans-serif; padding: 4px;">
-                <b style="font-size: 11px;">${title}</b><br/>
-                <span style="font-size: 9px; color: #666;">${subtitle}</span>
-            </div>
-        `).addTo(markersLayer.current);
-    };
+    const marker = L.circleMarker([pLat, pLng], {
+        radius: 7, // Slightly larger hit area for easier hover
+        fillColor: color,
+        color: '#fff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9
+    });
 
-    // A. BUCKET LIST (Green for Done, Orange for Pending)
+    // HOVER TOOLTIP: Shows the name immediately on hover
+    marker.bindTooltip(title, {
+        permanent: false,   // Show only on hover
+        direction: 'top',   // Appear above the dot
+        sticky: true,       // Follow the mouse cursor
+        className: 'custom-map-tooltip',
+        offset: [0, -5]     // Small gap so it doesn't touch the dot
+    });
+
+    // CLICK POPUP: Shows the category/subtitle when clicked
+    marker.bindPopup(`
+        <div style="padding: 4px;">
+            <b style="font-size: 11px; color: ${color};">${title}</b><br/>
+            <span style="font-size: 9px; color: #666;">${subtitle}</span>
+        </div>
+    `);
+
+    marker.addTo(markersLayer.current);
+};
+
     places.forEach(p => {
         const color = p.status === 'done' ? '#22c55e' : '#f97316';
         addDot(p.latitude, p.longitude, color, p.place_name || 'Destination', p.category || 'Bucket List');
     });
 
-    // B. SAVED ROUTES WAYPOINTS (Purple)
     savedRoutes.forEach(route => {
         try {
-            const points = typeof route.waypoints === 'string' 
-                ? JSON.parse(route.waypoints) 
-                : route.waypoints;
-
-            points?.forEach(pt => {
-                addDot(pt.lt, pt.ln, '#a855f7', pt.n || 'Stop', 'Route Point');
-            });
-        } catch (e) {
-            console.warn("Skipping invalid route data");
-        }
+            const pts = typeof route.waypoints === 'string' ? JSON.parse(route.waypoints) : route.waypoints;
+            pts?.forEach(pt => addDot(pt.lt, pt.ln, '#a855f7', pt.n || 'Stop', 'Route Point'));
+        } catch (e) {}
     });
 
+    return () => clearTimeout(resizeTimer);
 }, [mapReady, places, savedRoutes, activeTab]);
 
-        React.useEffect(() => {
-    if (navigator.geolocation) {
-        const watchId = navigator.geolocation.watchPosition(
-            (position) => {
-                setUserCoords({
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                });
-            },
-            (error) => console.error("GPS Error:", error),
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-        return () => navigator.geolocation.clearWatch(watchId);
-    }
-}, []);
 
-            useEffect(() => {
-    refreshAllData();
-    initGoogle();
-    
-}, []);
-
+// --- 5. SEARCH & FILTER LOGIC ---
 React.useEffect(() => {
-    setVisiblePlaces(places);
-}, [places]);
-
-React.useEffect(() => {
-    setFilteredPlaces(places);
-}, [places]);
-                
-                            
-            
-React.useEffect(() => {
-    // 1. HANDLE TAB SWITCHING (Disappearing Map Fix)
-    if (activeTab === 'map') {
-        const timer = setTimeout(() => {
-            if (mapRef.current) {
-                mapRef.current.invalidateSize(); // Forces Leaflet to recalculate its container
-            } else {
-                initMap();
-            }
-        }, 300); 
-    }
-
-    // 2. PREVENT FLASHING (Distance Throttle)
-    
-    if (!manualHome && userCoords) {
-        const getDistance = (c1, c2) => {
-            if (!c1 || !c2) return 999;
-            const R = 6371e3;
-            const dLat = (c2.lat - c1.lat) * Math.PI / 180;
-            const dLon = (c2.lng - c1.lng) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(c1.lat * Math.PI/180) * Math.cos(c2.lat * Math.PI/180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        };
-
-        const distance = getDistance(lastDrawnCoords.current, userCoords);
-        if (distance < 10 && routingControl.current) return; // Skip update if movement is tiny
-        lastDrawnCoords.current = userCoords;
-    }
-
-    // 3. SAFE CLEANUP (this._map is null fix)
-    const cleanupRouting = () => {
-        if (routingControl.current) {
-            try {
-                const ctrl = routingControl.current;
-                if (ctrl.getPlan()) ctrl.getPlan().setWaypoints([]);
-                if (mapRef.current && ctrl._map) {
-                    mapRef.current.removeControl(ctrl);
-                }
-            } catch (e) { console.log("Cleanup bypassed"); }
-            routingControl.current = null;
-        }
-    };
-
-    cleanupRouting();
-
-    // 4. DRAW THE RED ROUTE
-    if (activeTab === 'map' && selectedTrip.length > 0 && mapRef.current) {
-        
-        const start = manualHome ? HomePoint : (userCoords ? L.latLng(userCoords.lat, userCoords.lng) : HomePoint);
-
-        const waypoints = [
-            start,
-            ...selectedTrip.map(p => L.latLng(parseFloat(p.latitude), parseFloat(p.longitude)))
-        ];
-
-        if (waypoints.length >= 2) {
-            routingControl.current = L.Routing.control({
-                waypoints: waypoints,
-                router: L.Routing.osrmv1({
-                    serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1',
-                    profile: 'driving'
-                }),
-                lineOptions: { 
-                    styles: [{ color: '#ef4444', weight: 6, opacity: 0.9 }]
-                },
-                createMarker: () => null,
-                addWaypoints: false,
-                show: false 
-            }).addTo(mapRef.current);
-        }
-    }
-
-    return () => cleanupRouting();
-}, [activeTab, selectedTrip, userCoords, manualHome]);
-
-React.useEffect(() => {
-    // 1. If search is empty, show everything and exit
     if (!searchTerm) {
         setFilteredPlaces(places);
         return;
     }
-
-    const lowerSearch = searchTerm.toLowerCase();
-
-    // 2. Filter with defensive checks for missing names or categories
+    const lowSearch = searchTerm.toLowerCase();
     const filtered = places.filter(p => {
-        // Safe access: If p.place_name is missing, use an empty string instead of crashing
         const name = p?.place_name ? String(p.place_name).toLowerCase() : "";
-        const category = p?.category ? String(p.category).toLowerCase() : "";
-        
-        // 3. Match against either the name OR the category
-        return name.includes(lowerSearch) || category.includes(lowerSearch);
+        const cat = p?.category ? String(p.category).toLowerCase() : "";
+        return name.includes(lowSearch) || cat.includes(lowSearch);
     });
-
     setFilteredPlaces(filtered);
 }, [searchTerm, places]);
-
-
-
 
 
             const triggerToast = (msg) => {
@@ -735,45 +586,32 @@ const calculateRouteDistance = () => {
 };
 
 const handleSaveRoute = async () => {
-    // 1. Validation: Need at least 2 points
-    if (selectedTrip.length < 2) {
-        return alert("Select at least 2 locations to save a route.");
-    }
-
-    // 2. Prompt for name (using last destination as default)
-    const defaultName = `Trip to ${selectedTrip[selectedTrip.length - 1].place_name}`;
-    const routeName = prompt("Enter a name for this route plan:", defaultName);
+    if (selectedTrip.length === 0) return;
+    
+    const routeName = prompt("Enter a name for this route:");
     if (!routeName) return;
 
-    // 3. Duplicate check
-    const isNameDuplicate = savedRoutes.some(r => 
-        r.route_name.toLowerCase() === routeName.toLowerCase()
-    );
-    if (isNameDuplicate) return alert("A route plan with this name already exists!");
+    try {
+        const { error } = await supabaseClient.from('saved_travel_routes')
+            .insert([{
+                route_name: routeName, 
+                waypoints: JSON.stringify(selectedTrip.map(p => ({
+                    lt: p.latitude,
+                    ln: p.longitude,
+                    n: p.place_name
+                })))
+            }]);
 
-    // 4. Prepare portable data (Google Maps Style)
-    const waypointsData = selectedTrip.map(p => ({
-        n: p.place_name,
-        lt: p.latitude,
-        ln: p.longitude
-    }));
+        if (error) throw error;
 
-    // 5. Insert to the database
-    
-    const { error } = await supabaseClient
-        .from('saved_travel_routes') 
-        .insert([{ 
-            route_name: routeName, 
-            waypoints: JSON.stringify(waypointsData)
-        }]);
-
-    if (error) {
-        console.error("Save Error:", error.message);
-        triggerToast(`Save failed: ${error.message}`);
-    } else {
-        // Refresh the list after saving
-        if (typeof fetchSavedRoutes === 'function') fetchSavedRoutes();
-        triggerToast('Route Saved Successfully');
+        
+        await refreshAllData(); 
+        setSelectedTrip([]); 
+        
+        showToast("Route saved successfully!");
+    } catch (err) {
+        console.error("Save error:", err);
+        showToast("Failed to save route");
     }
 };
 
@@ -833,74 +671,134 @@ React.useEffect(() => {
 
 // --- SHARING & QR SYSTEM ---
 
-const shareRoute = (route) => {
-    const pts = JSON.parse(route.waypoints);
-    if (!pts || pts.length < 2) return;
+// --- 1. UNIVERSAL URL GENERATOR ---
+const generateGoogleMapsUrl = (points) => {
+    if (!points || points.length === 0) return null;
 
-    // Start point
-    const origin = `${pts[0].lt},${pts[0].ln}`;
-    // Destination (the last point)
-    const destination = `${pts[pts.length - 1].lt},${pts[pts.length - 1].ln}`;
-    // Everything in between
-    const waypoints = pts.slice(1, -1).map(p => `${p.lt},${p.ln}`).join('|');
+    // Use official Google Maps Directions deep-link format
+    const baseUrl = "https://www.google.com/maps/dir/";
+    
+    const stops = points.map(p => {
+        // Universal coordinate check: supports .latitude OR .lt
+        const lat = p.latitude !== undefined ? p.latitude : p.lt;
+        const lng = p.longitude !== undefined ? p.longitude : p.ln;
+        return `${lat},${lng}`;
+    }).join('/');
 
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
-
-    // Copy to clipboard or open
-    navigator.clipboard.writeText(googleMapsUrl);
-    triggerToast("Google Maps Link Copied!");
-    window.open(googleMapsUrl, '_blank');
+    return `${baseUrl}${stops}`;
 };
 
-const showQRCode = (url, name) => {
-    // Prevent duplicates
+// --- 2. COMPONENT HANDLERS ---
+
+// For the "Share" button in the Live Planning Sidebar
+const handleWhatsAppShare = () => {
+    const link = generateGoogleMapsUrl(selectedTrip);
+    if (!link) {
+        showToast("Add some places to your trip first!");
+        return;
+    }
+    const text = encodeURIComponent(`Check out my travel route: ${link}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+};
+
+// For the "QR" button in the Live Planning Sidebar
+const handleShowQR = () => {
+    if (!selectedTrip || selectedTrip.length === 0) {
+        showToast("Add some places to your trip first!");
+        return;
+    }
+    showQRCode(selectedTrip, "Current Trip Route");
+};
+
+// For the "Share" button inside the Saved Routes list (Database)
+const shareRoute = (route) => {
+    try {
+        // Parse waypoints (handling both Supabase stringified JSON and objects)
+        const pts = typeof route.waypoints === 'string' 
+            ? JSON.parse(route.waypoints) 
+            : route.waypoints;
+
+        if (!pts || pts.length === 0) {
+            showToast("This route has no waypoints.");
+            return;
+        }
+
+        // Open the unified modal using the saved points
+        showQRCode(pts, route.name || "Saved Route");
+
+    } catch (e) {
+        console.error("Route parsing failed:", e);
+        showToast("Error processing route data.");
+    }
+};
+
+// --- 3. THE OPTIMIZED MODAL ---
+const showQRCode = (points, name = "My Travel Route") => {
+    const universalUrl = generateGoogleMapsUrl(points);
+    if (!universalUrl) return;
+
+    // Clean up existing modals
     const existing = document.getElementById('qr-modal-overlay');
     if (existing) existing.remove();
 
+    // Create UI Elements
     const overlay = document.createElement('div');
     overlay.id = "qr-modal-overlay";
     overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
-    overlay.onclick = () => overlay.remove();
-
+    
     const modal = document.createElement('div');
     modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full animate-in zoom-in-95 duration-200 border border-slate-100";
+    
+    // Logic for closing
     modal.onclick = (e) => e.stopPropagation();
+    overlay.onclick = () => overlay.remove();
 
     modal.innerHTML = `
         <div class="text-center">
-            <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1 text-center">Scan to Navigate</p>
-            <h3 class="text-sm font-black uppercase text-slate-800 text-center leading-tight mb-4 px-4">${name}</h3>
+            <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Scan to Navigate</p>
+            <h3 class="text-sm font-black uppercase text-slate-800 leading-tight mb-4 px-4 line-clamp-2">${name}</h3>
         </div>
         
-        <div class="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 shadow-inner">
+        <div class="p-5 bg-slate-50 rounded-[2.5rem] border border-slate-100 shadow-inner">
             <div id="qrcode-canvas"></div>
         </div>
 
         <div class="w-full space-y-3">
-            <button id="copy-link-btn" class="w-full py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">Copy Link</button>
-            <button id="close-qr-btn" class="w-full py-3 bg-slate-100 text-slate-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors">Dismiss</button>
+            <button id="copy-link-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg active:scale-95">Copy Link</button>
+            <button id="whatsapp-modal-btn" class="w-full py-4 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 transition-all shadow-lg active:scale-95">WhatsApp</button>
+            <button id="close-qr-btn" class="w-full py-3 text-slate-400 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:text-slate-600">Dismiss</button>
         </div>
     `;
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // Initialize QR Code
-    new QRCode(document.getElementById("qrcode-canvas"), {
-        text: url,
-        width: 220,
-        height: 220,
-        colorDark: "#0f172a",
-        colorLight: "#f8fafc", // Matching slate-50 background
-        correctLevel: QRCode.CorrectLevel.H
-    });
+    // Initialize QR Code with slight delay for DOM insertion
+    setTimeout(() => {
+        const qrContainer = document.getElementById("qrcode-canvas");
+        if (qrContainer) {
+            new QRCode(qrContainer, {
+                text: universalUrl,
+                width: 200,
+                height: 200,
+                colorDark: "#0f172a",
+                colorLight: "#f8fafc", // Perfectly matches bg-slate-50
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+    }, 50);
 
-    // Button Logic
+    // Modal Interaction Logic
     modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
     
     modal.querySelector('#copy-link-btn').onclick = () => {
-        navigator.clipboard.writeText(url);
-        triggerToast("Link copied to clipboard!");
+        navigator.clipboard.writeText(universalUrl);
+        showToast("Link copied to clipboard!");
+    };
+
+    modal.querySelector('#whatsapp-modal-btn').onclick = () => {
+        const text = encodeURIComponent(`Check out my route: ${universalUrl}`);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
     };
 };
             // --- TAB 3: DASHBOARD FUNCTIONS ---
