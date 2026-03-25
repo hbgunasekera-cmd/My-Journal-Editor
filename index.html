@@ -836,37 +836,41 @@ const showQRCode = (points, name = "My Travel Route") => {
             // --- TAB 3: DASHBOARD FUNCTIONS ---
 
 const dashboardStats = React.useMemo(() => {
-    // Safety Guards: Ensure data exists and is an array
+    // 1. Safety Guards
     const safeAnalytics = Array.isArray(analyticsData) ? analyticsData : [];
     const safeLikes = Array.isArray(likesData) ? likesData : [];
 
-    const cityVisits = {};
-    const countryVisits = {};
-    const deviceVisits = { Desktop: 0, Mobile: 0, Tablet: 0 };
-    
-    // 1. Process Page Visits Metrics
-    safeAnalytics.forEach(v => {
-        if (!v) return;
-        
-        // Aggregate Geography
-        if (v.city) cityVisits[v.city] = (cityVisits[v.city] || 0) + 1;
-        if (v.country) countryVisits[v.country] = (countryVisits[v.country] || 0) + 1;
-        
-        // Aggregate Devices
+    // Helper: Aggregates a specific key and returns an array sorted by count (DESC)
+    const getSortedMetrics = (data, keyOrFn) => {
+        const counts = data.reduce((acc, item) => {
+            let val;
+            if (typeof keyOrFn === 'function') {
+                val = keyOrFn(item);
+            } else {
+                val = item[keyOrFn] || 'Unknown';
+            }
+            acc[val] = (acc[val] || 0) + 1;
+            return acc;
+        }, {});
+
+        return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    };
+
+    // 2. Process Geography (Sorted Highest to Lowest)
+    const countryStats = getSortedMetrics(safeAnalytics, 'country');
+    const cityStats = getSortedMetrics(safeAnalytics, 'city');
+
+    // 3. Process Device Types (Sorted Highest to Lowest)
+    const deviceStats = getSortedMetrics(safeAnalytics, (v) => {
         const ua = (v.user_agent || "").toLowerCase();
-        if (ua.includes('tablet') || ua.includes('ipad')) {
-            deviceVisits.Tablet++;
-        } else if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
-            deviceVisits.Mobile++;
-        } else {
-            deviceVisits.Desktop++;
-        }
+        if (ua.includes('tablet') || ua.includes('ipad')) return 'Tablet';
+        if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) return 'Mobile';
+        return 'Desktop/Laptop';
     });
 
-    // 2. Process Likes Summary (Location, Hits, City, Country)
+    // 4. Process Likes Summary (Sorted by Hits)
     const likesMap = {};
     safeLikes.forEach(l => {
-        // Use the joined travel_bucket_list table for the name
         const locName = l.travel_bucket_list?.place_name || 'Unknown Location';
         if (!likesMap[locName]) {
             likesMap[locName] = { 
@@ -879,14 +883,13 @@ const dashboardStats = React.useMemo(() => {
         likesMap[locName].hits += 1;
     });
 
-    // Sort by most hits
     const likesSummary = Object.values(likesMap).sort((a, b) => b.hits - a.hits);
 
     return { 
         totalVisits: safeAnalytics.length,
-        deviceVisits, 
-        cityVisits, 
-        countryVisits, 
+        deviceStats, // Array: [['Mobile', 10], ['Desktop', 5]]
+        cityStats,   // Array: [['Colombo', 15], ['Kandy', 3]]
+        countryStats, // Array: [['Sri Lanka', 18], ['USA', 1]]
         likesSummary 
     };
 }, [analyticsData, likesData]);
@@ -1389,53 +1392,58 @@ const handleSuggestionAction = async (suggestionId, action) => {
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
             
-            {/* 1. Page Visits Block (Updated to 3 Columns) */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
-                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
-                <div className="flex justify-between items-end mb-8 relative z-10">
-                    <div>
-                        <p className="text-[10px] font-black uppercase text-indigo-400 mb-1">Total Visits</p>
-                        <p className="text-5xl font-black italic">{dashboardStats.totalVisits}</p>
+            {/* 1. Page Visits Block (Updated to 3 Columns with Sorted Data) */}
+<div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
+    <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
+    <div className="flex justify-between items-end mb-8 relative z-10">
+        <div>
+            <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Total Visits</p>
+            <p className="text-5xl font-black italic">{dashboardStats.totalVisits}</p>
+        </div>
+        <i data-lucide="globe-2" className="w-8 h-8 text-slate-700"></i>
+    </div>
+    
+    <div className="grid grid-cols-3 gap-6 relative z-10">
+        {/* Countries Column */}
+        <div>
+            <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1 tracking-wider">Countries</p>
+            <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                {(dashboardStats.countryStats || []).map(([name, count]) => (
+                    <div key={name} className="flex justify-between text-[10px] font-bold text-slate-300">
+                        <span className="truncate pr-2">{name}</span>
+                        <span className="text-white font-black">{count}</span>
                     </div>
-                    <i data-lucide="globe-2" className="w-8 h-8 text-slate-700"></i>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-6 relative z-10">
-                    <div>
-                        <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1">Countries</p>
-                        <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
-                            {Object.entries(dashboardStats.countryVisits).map(([c, count]) => (
-                                <div key={c} className="flex justify-between text-[10px] font-bold text-slate-300">
-                                    <span className="truncate pr-2">{c}</span>
-                                    <span className="text-white">{count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div>
-                        <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1">Cities</p>
-                        <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
-                            {Object.entries(dashboardStats.cityVisits).map(([c, count]) => (
-                                <div key={c} className="flex justify-between text-[10px] font-bold text-slate-300">
-                                    <span className="truncate pr-2">{c}</span>
-                                    <span className="text-white">{count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div>
-                        <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1">Devices</p>
-                        <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
-                            {Object.entries(dashboardStats.deviceVisits || {}).map(([d, count]) => (
-                                <div key={d} className="flex justify-between text-[10px] font-bold text-slate-300">
-                                    <span className="truncate pr-1" title={d}>{d}</span>
-                                    <span className="text-white">{count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+                ))}
             </div>
+        </div>
+
+        {/* Cities Column */}
+        <div>
+            <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1 tracking-wider">Cities</p>
+            <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                {(dashboardStats.cityStats || []).map(([name, count]) => (
+                    <div key={name} className="flex justify-between text-[10px] font-bold text-slate-300">
+                        <span className="truncate pr-2">{name}</span>
+                        <span className="text-white font-black">{count}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* Devices Column */}
+        <div>
+            <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1 tracking-wider">Devices</p>
+            <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                {(dashboardStats.deviceStats || []).map(([name, count]) => (
+                    <div key={name} className="flex justify-between text-[10px] font-bold text-slate-300">
+                        <span className="truncate pr-1" title={name}>{name}</span>
+                        <span className="text-white font-black">{count}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+</div>
 
             {/* 2. Likes Metrics Block */}
             <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col justify-between">
