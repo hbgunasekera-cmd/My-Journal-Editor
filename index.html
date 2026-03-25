@@ -448,10 +448,29 @@ React.useEffect(() => {
 };
 
             // --- TAB 1: PLACES FUNCTIONS ---
-            const updatePlaceField = async (id, field, value) => {
-                const { error } = await supabaseClient.from('travel_bucket_list').update({ [field]: value }).eq('id', id);
-                if (!error) { triggerToast('Updated Successfully'); refreshAllData(); }
-            };
+const updatePlaceField = async (id, field, value) => {
+    // 1. Prepare the update object
+    const updateData = { [field]: value };
+
+    // 2. Logic: If the field being updated is 'status', also update 'created_at'
+    if (field === 'status') {
+        
+        updateData.created_at = new Date().toISOString();
+    }
+
+    const { error } = await supabaseClient
+        .from('travel_bucket_list')
+        .update(updateData)
+        .eq('id', id);
+
+    if (!error) { 
+        triggerToast('Updated Successfully'); 
+        refreshAllData(); 
+    } else {
+        triggerToast('Update Failed');
+        console.error("Update Error:", error);
+    }
+};
 
             const promptForValue = (id, field, currentVal, title) => {
                 const val = prompt(`Enter ${title}:`, currentVal || '');
@@ -1073,9 +1092,22 @@ const handleSuggestionAction = async (suggestionId, action) => {
     </button>
 
     {/* Status Toggle */}
-    <button onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md ${p.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white text-orange-500'}`}>
+    <button 
+    onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} 
+    className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 select-none outline-none ${
+        p.status === 'done' 
+            ? 'bg-emerald-500 text-white' 
+            : 'bg-white text-orange-500'
+    }`}
+>
+    <div className="flex items-center gap-1">
+        <i 
+            data-lucide={p.status === 'done' ? 'check-circle' : 'circle'} 
+            className="w-2.5 h-2.5"
+        ></i>
         {p.status}
-    </button>
+    </div>
+</button>
 </div>
                                                 
                                                 {/* Body Editables */}
