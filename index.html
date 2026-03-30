@@ -299,64 +299,82 @@ React.useEffect(() => {
 
 // --- 4. MARKER MANAGER EFFECT ---
 React.useEffect(() => {
-    if (!mapRef.current || activeTab !== 'map') return;
+    // 1. Guard: Only run if map instance exists
+    if (!mapRef.current || !mapReady) return;
 
-    // Disappearing Map Fix (Container Resize)
-    const resizeTimer = setTimeout(() => mapRef.current.invalidateSize(), 300);
-
-    markersLayer.current.clearLayers();
-    if (!mapRef.current.hasLayer(markersLayer.current)) {
-        markersLayer.current.addTo(mapRef.current);
+    // 2. Fix Layout: Re-calculate map dimensions when switching to Map Tab
+    // Using a 100ms delay to allow CSS transitions/displays to finish
+    let resizeTimer;
+    if (activeTab === 'map') {
+        resizeTimer = setTimeout(() => {
+            mapRef.current.invalidateSize();
+        }, 100);
     }
 
+    // 3. Clear existing markers for a fresh render
+    markersLayer.current.clearLayers();
+
+    // 4. Helper: Add customized CircleMarkers
     const addDot = (lat, lng, color, title, subtitle) => {
-    const pLat = parseFloat(lat);
-    const pLng = parseFloat(lng);
-    if (isNaN(pLat) || isNaN(pLng)) return;
+        const pLat = parseFloat(lat);
+        const pLng = parseFloat(lng);
+        if (isNaN(pLat) || isNaN(pLng)) return;
 
-    const marker = L.circleMarker([pLat, pLng], {
-        radius: 7, // Slightly larger hit area for easier hover
-        fillColor: color,
-        color: '#fff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.9
+        const marker = L.circleMarker([pLat, pLng], {
+            radius: 7,
+            fillColor: color,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+        });
+
+        // HOVER: Show Name
+        marker.bindTooltip(title, {
+            direction: 'top',
+            sticky: true,
+            className: 'custom-map-tooltip',
+            offset: [0, -5]
+        });
+
+        // CLICK: Show Category Info
+        marker.bindPopup(`
+            <div style="padding: 4px; font-family: sans-serif;">
+                <b style="font-size: 11px; color: ${color}; text-transform: uppercase;">${title}</b><br/>
+                <span style="font-size: 9px; color: #64748b; font-weight: bold; text-transform: uppercase;">${subtitle}</span>
+            </div>
+        `);
+
+        marker.addTo(markersLayer.current);
+    };
+
+    // 5. Draw Places (Sync with Search Results)
+    // We use filteredPlaces so that markers disappear/appear as you search
+    const displayList = searchTerm ? filteredPlaces : places;
+    displayList.forEach(p => {
+        const color = p.status === 'done' ? '#22c55e' : '#f97316'; // Green for visited, Orange for bucket list
+        addDot(p.latitude, p.longitude, color, p.place_name || 'Location', p.category || 'Point of Interest');
     });
 
-    // HOVER TOOLTIP: Shows the name immediately on hover
-    marker.bindTooltip(title, {
-        permanent: false,   // Show only on hover
-        direction: 'top',   // Appear above the dot
-        sticky: true,       // Follow the mouse cursor
-        className: 'custom-map-tooltip',
-        offset: [0, -5]     // Small gap so it doesn't touch the dot
-    });
-
-    // CLICK POPUP: Shows the category/subtitle when clicked
-    marker.bindPopup(`
-        <div style="padding: 4px;">
-            <b style="font-size: 11px; color: ${color};">${title}</b><br/>
-            <span style="font-size: 9px; color: #666;">${subtitle}</span>
-        </div>
-    `);
-
-    marker.addTo(markersLayer.current);
-};
-
-    places.forEach(p => {
-        const color = p.status === 'done' ? '#22c55e' : '#f97316';
-        addDot(p.latitude, p.longitude, color, p.place_name || 'Destination', p.category || 'Bucket List');
-    });
-
+    // 6. Draw Saved Route Waypoints
     savedRoutes.forEach(route => {
         try {
             const pts = typeof route.waypoints === 'string' ? JSON.parse(route.waypoints) : route.waypoints;
-            pts?.forEach(pt => addDot(pt.lt, pt.ln, '#a855f7', pt.n || 'Stop', 'Route Point'));
-        } catch (e) {}
+            pts?.forEach(pt => {
+                // Purple dots for route waypoints to distinguish them from locations
+                addDot(pt.lt, pt.ln, '#a855f7', pt.n || 'Route Stop', 'Saved Route Plan');
+            });
+        } catch (e) {
+            console.error("Error parsing waypoints for route markers", e);
+        }
     });
 
-    return () => clearTimeout(resizeTimer);
-}, [mapReady, places, savedRoutes, activeTab]);
+    // 7. Cleanup timer on unmount or re-run
+    return () => {
+        if (resizeTimer) clearTimeout(resizeTimer);
+    };
+
+}, [mapReady, activeTab, filteredPlaces, places, savedRoutes, searchTerm]);
 
 
 // --- 5. SEARCH & FILTER LOGIC ---
@@ -1178,200 +1196,188 @@ const handleSuggestionAction = async (suggestionId, action) => {
                             </div>
                         )}
 
-                        {/* TAB 2: MAP */}
-{activeTab === 'map' && (
-    <div className="flex h-full">
-        <aside className="w-80 border-r border-slate-100 flex flex-col bg-white overflow-hidden shadow-2xl z-[1000]">
+                        {/* TAB 2: MAP - Consolidated with Lifecycle & Route Fixes */}
+<div className={`flex h-full ${activeTab === 'map' ? 'block' : 'hidden'}`}>
+    <aside className="w-80 border-r border-slate-100 flex flex-col bg-white overflow-hidden shadow-2xl z-[1000]">
+        
+        {/* 1. Saved Route Plans */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50/30">
+            <div className="flex justify-between items-center mb-3">
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saved Route Plans</p>
+                <button 
+                    onClick={() => {
+                        setFilteredPlaces(places);
+                        setSelectedTrip([]);
+                        setSearchTerm('');
+                        if (routingControl.current) mapRef.current.removeControl(routingControl.current);
+                        triggerToast('View Reset');
+                    }}
+                    className="text-[8px] font-black uppercase text-rose-500 hover:text-rose-600"
+                >
+                    Reset All
+                </button>
+            </div>
             
-            {/* 1. Saved Route Plans */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/30">
-                <div className="flex justify-between items-center mb-3">
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saved Route Plans</p>
-                    <button 
-                        onClick={() => {
-                            setFilteredPlaces(places);
-                            setSelectedTrip([]);
-                            setSearchTerm('');
-                            if (routingControl.current) mapRef.current.removeControl(routingControl.current);
-                            triggerToast('View Reset');
-                        }}
-                        className="text-[8px] font-black uppercase text-rose-500 hover:text-rose-600"
-                    >
-                        Reset All
-                    </button>
-                </div>
-                
-                <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-    {savedRoutes.length === 0 ? (
-        <p className="text-[10px] text-slate-300 italic py-4 text-center border border-dashed border-slate-200 rounded-xl uppercase font-bold">No saved routes</p>
-    ) : (
-        savedRoutes.map((route) => {
-            // FIX: Parse wpArray here so it is accessible to both the badge and the onClick handler
-            let wpArray = [];
-            try {
-                wpArray = typeof route.waypoints === 'string' 
-                    ? JSON.parse(route.waypoints) 
-                    : (route.waypoints || []);
-            } catch (e) {
-                wpArray = [];
-            }
+            <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {savedRoutes.length === 0 ? (
+                    <p className="text-[10px] text-slate-300 italic py-4 text-center border border-dashed border-slate-200 rounded-xl uppercase font-bold">No saved routes</p>
+                ) : (
+                    savedRoutes.map((route) => {
+                        let wpArray = [];
+                        try {
+                            wpArray = typeof route.waypoints === 'string' 
+                                ? JSON.parse(route.waypoints) 
+                                : (route.waypoints || []);
+                        } catch (e) {
+                            wpArray = [];
+                        }
 
-            return (
-                <div key={route.id} className="p-2.5 bg-white border border-slate-100 rounded-xl shadow-sm hover:border-emerald-200 transition-all group">
-                    <div 
-                        onClick={() => {
-                            if (wpArray.length > 0) {
-                                const enrichedPlaces = wpArray.map(wp => {
-                                    // 1. Handle simple UUID format (strings)
-                                    if (typeof wp === 'string') {
-                                        const match = places.find(p => p.id === wp);
-                                        return match ? match : { id: wp, place_name: "Unknown Stop" };
-                                    }
-                                    
-                                    // 2. Handle new Portable format {n: name, lt: lat, ln: lng}
-                                    if (wp.lt && wp.ln) {
-                                        return {
-                                            id: Math.random(), // Unique key for React
-                                            place_name: wp.n || "Saved Stop",
-                                            latitude: wp.lt,
-                                            longitude: wp.ln,
-                                            category: "Saved Route"
-                                        };
-                                    }
-                                    
-                                    // 3. Fallback for old object format
-                                    const match = places.find(p => p.id === wp.id);
-                                    return match ? match : { ...wp, place_name: wp.place_name || wp.name || "Unknown Stop" };
-                                });
+                        return (
+                            <div key={route.id} className="p-2.5 bg-white border border-slate-100 rounded-xl shadow-sm hover:border-emerald-200 transition-all group">
+                                <div 
+                                    onClick={() => {
+                                        if (wpArray.length > 0) {
+                                            const enrichedPlaces = wpArray.map(wp => {
+                                                if (typeof wp === 'string') {
+                                                    const match = places.find(p => p.id === wp);
+                                                    return match ? match : { id: wp, place_name: "Unknown Stop" };
+                                                }
+                                                if (wp.lt && wp.ln) {
+                                                    return {
+                                                        id: `temp-${Math.random()}`,
+                                                        place_name: wp.n || "Saved Stop",
+                                                        latitude: wp.lt,
+                                                        longitude: wp.ln,
+                                                        category: "Saved Route"
+                                                    };
+                                                }
+                                                const match = places.find(p => p.id === wp.id);
+                                                return match ? match : { ...wp, place_name: wp.place_name || wp.name || "Unknown Stop" };
+                                            });
 
-                                setSelectedTrip(enrichedPlaces);
-                                setActiveTab('map'); // Ensure user sees the route on the map
-                                triggerToast(`Loaded: ${route.route_name}`);
-                            }
-                        }} 
-                        className="cursor-pointer"
-                    >
-                        <div className="flex justify-between items-start">
-                            <p className="text-[10px] font-black uppercase text-slate-700 group-hover:text-emerald-600">
-                                {route.route_name}
-                            </p>
-                            {/* wpArray is now defined and safe to use here */}
-                            <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-1 py-0.5 rounded uppercase">
-                                {wpArray.length} Pts
-                            </span>
-                        </div>
-                        <p className="text-[7px] font-bold text-slate-400 uppercase mt-1">Tap to load route</p>
-                    </div>
-                    
-                    <div className="flex gap-1.5 mt-2">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); shareRoute(route); }} 
-                            className="flex-1 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase border border-emerald-100 hover:bg-emerald-100"
-                        >
-                            Share
-                        </button>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); deleteRoute(route.id); }} 
-                            className="flex-1 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase border border-rose-100 hover:bg-rose-100"
-                        >
-                            Delete
-                        </button>
-                    </div>
-                </div>
-            );
-        })
-    )}
-</div>
+                                            setSelectedTrip(enrichedPlaces);
+                                            triggerToast(`Loaded: ${route.route_name}`);
+                                        }
+                                    }} 
+                                    className="cursor-pointer"
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <p className="text-[10px] font-black uppercase text-slate-700 group-hover:text-emerald-600 truncate pr-2">
+                                            {route.route_name}
+                                        </p>
+                                        <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-1 py-0.5 rounded uppercase shrink-0">
+                                            {wpArray.length} Pts
+                                        </span>
+                                    </div>
+                                    <p className="text-[7px] font-bold text-slate-400 uppercase mt-1">Tap to load route</p>
+                                </div>
+                                
+                                <div className="flex gap-1.5 mt-2">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); shareRoute(route); }} 
+                                        className="flex-1 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase border border-emerald-100 hover:bg-emerald-100"
+                                    >
+                                        Share
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); deleteRoute(route.id); }} 
+                                        className="flex-1 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase border border-rose-100 hover:bg-rose-100"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
             </div>
+        </div>
 
-            {/* 2. Active Trip Planner */}
-            <div className="p-4 border-b border-slate-100 bg-indigo-50/30">
-                <div className="flex justify-between items-end mb-3">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <p className="text-[10px] font-black uppercase text-indigo-700">Active Plan ({selectedTrip.length})</p>
-                            {selectedTrip.length > 0 && (
-                                <button onClick={() => setManualHome(manualHome ? null : {lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng})} className="transition-all active:scale-90">
-                                    {manualHome ? (
-                                        <div className="flex items-center gap-1 bg-rose-100 px-1.5 py-0.5 rounded-full border border-rose-200">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                                            <span className="text-[7px] font-black text-rose-600 uppercase">Manual</span>
-                                            <i data-lucide="mouse-pointer-click" className="w-2 h-2 text-rose-400 ml-0.5"></i>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1 bg-emerald-100 px-1.5 py-0.5 rounded-full border border-emerald-200">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                            <span className="text-[7px] font-black text-emerald-600 uppercase">GPS</span>
-                                        </div>
-                                    )}
-                                </button>
-                            )}
-                        </div>
-                        <p className="text-[8px] font-bold uppercase text-slate-500 mt-1 tracking-tighter">
-                            {selectedTrip.length > 0 ? `Est. Journey: ${calculateRouteDistance()} KM` : "Empty Plan"}
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
+        {/* 2. Active Trip Planner */}
+        <div className="p-4 border-b border-slate-100 bg-indigo-50/30">
+            <div className="flex justify-between items-end mb-3">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-black uppercase text-indigo-700">Active Plan ({selectedTrip.length})</p>
                         {selectedTrip.length > 0 && (
-                            <button onClick={() => { setSelectedTrip([]); setFilteredPlaces(places); }} className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase">Clear</button>
+                            <button onClick={() => setManualHome(manualHome ? null : {lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng})} className="transition-all active:scale-90">
+                                {manualHome ? (
+                                    <div className="flex items-center gap-1 bg-rose-100 px-1.5 py-0.5 rounded-full border border-rose-200">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                        <span className="text-[7px] font-black text-rose-600 uppercase">Manual</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1 bg-emerald-100 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        <span className="text-[7px] font-black text-emerald-600 uppercase">GPS</span>
+                                    </div>
+                                )}
+                            </button>
                         )}
-                        <button onClick={handleSaveRoute} disabled={selectedTrip.length < 2} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase disabled:opacity-50">Save Plan</button>
                     </div>
+                    <p className="text-[8px] font-bold uppercase text-slate-500 mt-1 tracking-tighter">
+                        {selectedTrip.length > 0 ? `Est. Journey: ${calculateRouteDistance()} KM` : "Empty Plan"}
+                    </p>
                 </div>
-
-                <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar">
-                    {selectedTrip.map((t, idx) => (
-                        <div key={`${t.id}-${idx}`} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-indigo-100 shadow-sm group">
-                            <div className="flex flex-col truncate pr-2">
-                                <span className="text-[9px] font-black uppercase truncate text-slate-800">
-                                    {idx + 1}. {t.place_name || "Unknown Location"}
-                                </span>
-                                <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
-                            </div>
-                            <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="p-1 text-slate-300 hover:text-rose-500">
-                                <i data-lucide="trash-2" className="w-3 h-3"></i>
-                            </button>
-                        </div>
-                    ))}
+                <div className="flex gap-2">
+                    {selectedTrip.length > 0 && (
+                        <button onClick={() => { setSelectedTrip([]); setFilteredPlaces(places); }} className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase">Clear</button>
+                    )}
+                    <button onClick={handleSaveRoute} disabled={selectedTrip.length < 2} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase disabled:opacity-50 shadow-lg shadow-indigo-200">Save Plan</button>
                 </div>
             </div>
 
-            {/* 3. Available Locations */}
-            <div className="flex-1 flex flex-col min-h-0 bg-white">
-                <div className="p-4 bg-white border-b border-slate-50">
-                    <div className="relative">
-                        <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
-                        <input 
-                            type="text" 
-                            placeholder="Search locations..." 
-                            value={searchTerm} 
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold uppercase outline-none focus:border-emerald-400"
-                        />
-                    </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 select-none">
-                    {filteredPlaces.filter(p => !selectedTrip.find(t => t.id === p.id)).map(p => (
-                        <div key={p.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors group">
-                            <div className="flex flex-col truncate pr-2">
-                                <span className="text-[9px] font-black uppercase truncate text-slate-600 group-hover:text-slate-900">{p.place_name}</span>
-                                <span className="text-[7px] font-bold uppercase text-slate-400">{p.category}</span>
-                            </div>
-                            <button onClick={() => { setSelectedTrip([...selectedTrip, p]); triggerToast(`Added ${p.place_name}`); }} className="text-emerald-500 hover:bg-emerald-50 p-1.5 rounded-lg transition-all active:scale-90">
-                                <i data-lucide="plus-circle" className="w-3.5 h-3.5"></i>
-                            </button>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar">
+                {selectedTrip.map((t, idx) => (
+                    <div key={`${t.id}-${idx}`} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-indigo-100 shadow-sm group">
+                        <div className="flex flex-col truncate pr-2">
+                            <span className="text-[9px] font-black uppercase truncate text-slate-800">
+                                {idx + 1}. {t.place_name || "Unknown Location"}
+                            </span>
+                            <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
                         </div>
-                    ))}
+                        <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="p-1 text-slate-300 hover:text-rose-500 transition-colors">
+                            <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* 3. Available Locations */}
+        <div className="flex-1 flex flex-col min-h-0 bg-white">
+            <div className="p-4 bg-white border-b border-slate-50">
+                <div className="relative">
+                    <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
+                    <input 
+                        type="text" 
+                        placeholder="Search locations..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold uppercase outline-none focus:border-indigo-400 transition-all"
+                    />
                 </div>
             </div>
-        </aside>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 select-none custom-scrollbar">
+                {filteredPlaces.filter(p => !selectedTrip.find(t => t.id === p.id)).map(p => (
+                    <div key={p.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-xl border border-transparent hover:border-slate-100 transition-all group">
+                        <div className="flex flex-col truncate pr-2">
+                            <span className="text-[9px] font-black uppercase truncate text-slate-600 group-hover:text-slate-900">{p.place_name}</span>
+                            <span className="text-[7px] font-bold uppercase text-slate-400">{p.category}</span>
+                        </div>
+                        <button onClick={() => { setSelectedTrip([...selectedTrip, p]); triggerToast(`Added ${p.place_name}`); }} className="text-emerald-500 hover:bg-emerald-50 p-2 rounded-lg transition-all active:scale-90">
+                            <i data-lucide="plus-circle" className="w-4 h-4"></i>
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </aside>
 
-        <section className="flex-1 relative bg-slate-100">
-            <div id="map-container" className="w-full h-full"></div>
-        </section>
-    </div>
-)}
-
+    <section className="flex-1 relative bg-slate-100">
+        <div id="map-container" className="w-full h-full"></div>
+    </section>
+</div>
                         {/* TAB 3: DASHBOARD */}
 {activeTab === 'dashboard' && (
     <div className="h-full overflow-y-auto p-8 no-scrollbar bg-slate-50">
