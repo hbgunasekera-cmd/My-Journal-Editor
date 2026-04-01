@@ -962,22 +962,32 @@ const handleSuggestionAction = async (suggestionId, action) => {
 
             if (fetchError) throw fetchError;
 
-            // 2. INSERT INTO TRAVEL_BUCKET_LIST (Mapping columns)
-            const { error: insertError } = await supabaseClient
-                .from('travel_bucket_list')
-                .insert([{
-                    place_name: suggestion.place_name,
-                    google_maps_url: suggestion.map_url,
-                    latitude: suggestion.latitude,
-                    longitude: suggestion.longitude,
-                    category: suggestion.category,
-                    locality: suggestion.district, // Mapping District to Locality
-                    cover_photo_url: suggestion.image_url,
-                    status: 'Pending', // New items in bucket list usually start as Pending
-                    created_at: new Date().toISOString()
-                }]);
+            // 2. CALCULATE DISTANCE & PREPARE INSERT
+// We use the device location (userCoords) to calculate how far the suggestion is
+const dist = userCoords ? calculateDistance(
+    userCoords.lat, 
+    userCoords.lng, 
+    suggestion.latitude, 
+    suggestion.longitude
+) : null;
 
-            if (insertError) throw insertError;
+// 3. INSERT INTO TRAVEL_BUCKET_LIST
+const { error: insertError } = await supabaseClient
+    .from('travel_bucket_list')
+    .insert([{
+        place_name: suggestion.place_name,
+        google_maps_url: suggestion.map_url,
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+        category: suggestion.category,
+        locality: suggestion.district, 
+        distance: dist,
+        status: 'pending', 
+        created_at: new Date().toISOString()
+       
+    }]);
+
+if (insertError) throw insertError;
 
             // 3. REMOVE FROM PENDING TABLE AFTER SUCCESSFUL MOVE
             const { error: deleteError } = await supabaseClient
