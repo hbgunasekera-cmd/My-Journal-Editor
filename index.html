@@ -150,7 +150,7 @@
 }
 
 
-span[ref] svg {
+.inline-flex svg.lucide {
     width: 100% !important;
     height: 100% !important;
     display: block;
@@ -184,6 +184,40 @@ span[ref] svg {
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);        
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
+        // Place this outside of your components
+let iconTimeout;
+const triggerLucide = () => {
+    clearTimeout(iconTimeout);
+    iconTimeout = setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons({
+                attrs: { 'stroke-width': 1.75 }
+            });
+        }
+    }, 50); // Batches all icon renders into a single document scan
+};
+
+const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
+    const spanRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (spanRef.current) {
+            // Shield DOM mutation from React by manually injecting innerHTML.
+            // React only tracks the outer <span>, keeping the app stable.
+            spanRef.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
+            triggerLucide();
+        }
+    }, [name, className]);
+
+    return (
+        <span 
+            ref={spanRef} 
+            className={`inline-flex items-center justify-center shrink-0 ${className}`}
+            style={{ minWidth: '1em', minHeight: '1em' }}
+        ></span>
+    );
+});
+        
         function App() {
 
 // --- Core Data States ---
@@ -200,6 +234,7 @@ const [weatherData, setWeatherData] = useState({});
 const [debouncedSearch, setDebouncedSearch] = useState('');
 const [userCoords, setUserCoords] = React.useState(null);
 const [sortCenter, setSortCenter] = useState(HomePoint);
+const [locationSource, setLocationSource] = useState('device');
 
 // --- UI & Interaction States ---
 const [activeTab, setActiveTab] = useState('places');
@@ -227,58 +262,51 @@ const [qrUrl, setQrUrl] = React.useState('');
 
 // --- 1. REFACTORED ICON SYSTEM ---
 
-React.useEffect(() => {
-    // This looks for all [data-lucide] tags and replaces them with SVGs
-    if (window.lucide) {
-        window.lucide.createIcons();
-    }
-}, []);
-
-const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
-    const containerRef = React.useRef(null);
-
-    React.useLayoutEffect(() => {
-        if (window.lucide && containerRef.current) {
-            // Clear and set the raw i tag
-            containerRef.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
-            
-            // Short delay ensures React has painted the span before Lucide looks for it
-            const timer = setTimeout(() => {
-                window.lucide.createIcons({
-                    root: containerRef.current,
-                    attrs: { 'stroke-width': 1.75 }
-                });
-            }, 0);
-            return () => clearTimeout(timer);
-        }
-    }, [name, className]);
-
-    // Added key to force re-mount if the icon name changes drastically
-    return <span key={name} ref={containerRef} className="inline-flex items-center justify-center"></span>;
-});
 
 const WeatherIcon = ({ condition }) => {
-    const icons = {
-        Clear: "sun",
-        Clouds: "cloud",
-        Rain: "cloud-rain",
-        Drizzle: "cloud-drizzle",
-        Thunderstorm: "cloud-lightning",
-        Snow: "snowflake"
+    // Map OpenWeather/Standard conditions to Lucide icons
+    const weatherMap = {
+        'Clear': { icon: 'sun', color: 'text-amber-500' },
+        'Clouds': { icon: 'cloud', color: 'text-slate-400' },
+        'Rain': { icon: 'cloud-rain', color: 'text-blue-500' },
+        'Drizzle': { icon: 'cloud-drizzle', color: 'text-cyan-500' },
+        'Thunderstorm': { icon: 'cloud-lightning', color: 'text-yellow-500' },
+        'Snow': { icon: 'snowflake', color: 'text-sky-300' },
+        'Mist': { icon: 'cloud-fog', color: 'text-slate-300' },
+        'Smoke': { icon: 'cloud-fog', color: 'text-slate-300' },
+        'Haze': { icon: 'cloud-fog', color: 'text-slate-300' },
+        'Dust': { icon: 'wind', color: 'text-orange-300' },
+        'Fog': { icon: 'cloud-fog', color: 'text-slate-300' },
     };
-    return <Icon name={icons[condition] || "cloud"} className="w-3.5 h-3.5 text-blue-500" />;
+
+    const config = weatherMap[condition] || { icon: 'cloud', color: 'text-slate-400' };
+
+    return <Icon name={config.icon} className={`w-3.5 h-3.5 ${config.color}`} />;
 };
 
 
 // --- 2. GPS & DATA INITIALIZATION ---
 
-React.useEffect(() => {
+// Update Reference Point whenever GPS or Toggle changes
+useEffect(() => {
+    if (locationSource === 'device' && userCoords) {
+        setSortCenter(userCoords);
+    } else {
+        setSortCenter(HomePoint);
+    }
+}, [userCoords, locationSource]);
+
+// Update the Geolocation effect to just store coordinates
+useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition((pos) => {
-            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setUserCoords(coords);
-            setSortCenter(coords); 
+            setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }, (err) => {
+            console.warn("GPS Access Denied, falling back to HomePoint");
+            setLocationSource('home'); // Auto-fallback
         });
+    } else {
+        setLocationSource('home');
     }
 }, []);
 
@@ -506,22 +534,30 @@ React.useEffect(() => {
                 setTimeout(() => setToast({ show: false, msg: '' }), 2500);
             };
 
-            const refreshAllData = async () => {
-    const [p, sr, v, a, c, l] = await Promise.all([
-        supabaseClient.from('travel_bucket_list').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('saved_travel_routes').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('page_visits').select('*'), // Fetch raw visits
-        supabaseClient.from('pending_approvals').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('location_comments').select('*, travel_bucket_list(place_name)').order('created_at', { ascending: false }), // Fetch ALL comments
-        supabaseClient.from('location_likes').select('*, travel_bucket_list(place_name)')
-    ]);
+           const refreshAllData = async () => {
+    try {
+        const [p, sr, v, a, c, l] = await Promise.all([
+            supabaseClient.from('travel_bucket_list').select('*').order('created_at', { ascending: false }),
+            supabaseClient.from('saved_travel_routes').select('*').order('created_at', { ascending: false }),
+            supabaseClient.from('page_visits').select('*'),
+            supabaseClient.from('pending_approvals').select('*').order('created_at', { ascending: false }),
+            supabaseClient.from('location_comments').select('*, travel_bucket_list(place_name)').order('created_at', { ascending: false }),
+            supabaseClient.from('location_likes').select('*, travel_bucket_list(place_name)')
+        ]);
 
-    setPlaces(p.data || []);
-    setSavedRoutes(sr.data || []);
-    setAnalyticsData(v.data || []);
-    setPendingApprovals(a.data || []);
-    setAllComments(c.data || []);
-    setLikesData(l.data || []);
+        // Throw an error if any fetch returns an error object from Supabase
+        if (p.error) throw p.error;
+
+        setPlaces(p.data || []);
+        setSavedRoutes(sr.data || []);
+        setAnalyticsData(v.data || []);
+        setPendingApprovals(a.data || []);
+        setAllComments(c.data || []);
+        setLikesData(l.data || []);
+    } catch (error) {
+        console.error("Database sync failed:", error);
+        triggerToast("Failed to sync database. Check connection.");
+    }
 };
 
 
@@ -611,42 +647,32 @@ useEffect(() => {
     }
 }, [userCoords]);
 
-         const processedPlaces = useMemo(() => {
-    // 1. Filter using the correct property: place_name
+        const processedPlaces = useMemo(() => {
+    // 1. Filtering Logic
     const filtered = places.filter(place => {
-        // Added optional chaining (?.) and a fallback empty string
         const name = (place.place_name || "").toLowerCase(); 
-        const matchesSearch = name.includes(searchTerm.toLowerCase());
-        
+        const matchesSearch = name.includes(debouncedSearch.toLowerCase()); 
         const matchesCat = filterCategory === 'All' || place.category === filterCategory;
         const matchesStatus = filterStatus === 'All' || place.status === filterStatus;
         
         return matchesSearch && matchesCat && matchesStatus;
     });
 
-    // 2. Pre-calculate distances once (O(n))
-    const center = L.latLng(sortCenter.lat, sortCenter.lng);
-    const withDistances = filtered.map(place => ({
-        ...place,
-        _distance: center.distanceTo(L.latLng(place.latitude, place.longitude))
-    }));
-
-    // 3. Sort logic update
-    return withDistances.sort((a, b) => {
+    // 2. Sorting Logic (CRITICAL: This must return the final array)
+    return [...filtered].sort((a, b) => {
         if (sortBy === 'distance') {
-            return a._distance - b._distance;
+            const distA = L.latLng(sortCenter.lat, sortCenter.lng)
+                .distanceTo(L.latLng(a.latitude, a.longitude));
+            const distB = L.latLng(sortCenter.lat, sortCenter.lng)
+                .distanceTo(L.latLng(b.latitude, b.longitude));
+            return distA - distB;
         }
-        if (sortBy === 'name') {
-            // Also update this to use place_name
-            return (a.place_name || "").localeCompare(b.place_name || "");
-        }
-        // Fallback for 'newest' (assuming created_at exists)
-        if (sortBy === 'newest') {
-            return new Date(b.created_at) - new Date(a.created_at);
-        }
-        return 0;
+        
+        // Default: Sort by Newest (Date)
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
-}, [places, searchTerm, filterCategory, filterStatus, sortBy, sortCenter]);
+    
+}, [places, debouncedSearch, filterCategory, filterStatus, sortBy, sortCenter]);
             
             const deleteLocation = async (id, name) => {
     if (confirm(`Are you sure you want to delete "${name}"?`)) {
@@ -685,76 +711,85 @@ const initMap = () => {
 };
 
 
-const updateMapMarkers = () => {
+const updateMapMarkers = React.useCallback(() => {
+    // 1. Safety check for Leaflet refs
     if (!mapRef.current || !markersLayer.current) return;
     
+    // 2. Performance: Clear existing layers before repainting
     markersLayer.current.clearLayers();
 
-    const displayList = searchTerm ? filteredPlaces : places;
+    // 3. Optimization: Use debouncedSearch to prevent lag during typing
+    const displayList = debouncedSearch ? filteredPlaces : places;
     
     displayList.forEach(p => {
+        // Ensure valid coordinates exist
         if (!p.latitude || !p.longitude) return;
         
+        // 4. Logic: Determine marker state (Selected vs Done vs Pending)
         const isSelected = selectedTrip.some(item => item.id === p.id);
         const markerClass = isSelected ? 'marker-selected' : 
                            (p.status === 'done' ? 'marker-done' : 'marker-pending');
 
+        // 5. UI: Define the Dot Marker
         const icon = L.divIcon({
-            className: `${markerClass} shadow-md transition-transform duration-200`,
+            className: `${markerClass} shadow-md transition-all duration-200 hover:scale-150`,
             iconSize: [12, 12],
             iconAnchor: [6, 6]
         });
 
-        const marker = L.marker([parseFloat(p.latitude), parseFloat(p.longitude)], { icon });
+        const lat = parseFloat(p.latitude);
+        const lng = parseFloat(p.longitude);
 
-        // Corrected property: p.place_name
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        const marker = L.marker([lat, lng], { icon });
+
+        // 6. UI: Standardized Popup with correct naming and styling
         marker.bindPopup(`
-            <div style="padding: 2px 4px;">
-                <p style="margin:0; font-weight:800; font-size:10px; color:#1e293b; text-transform:uppercase;">
+            <div style="padding: 2px 4px; pointer-events: none;">
+                <p style="margin:0; font-family: inherit; font-weight:900; font-size:10px; color:#1e293b; text-transform:uppercase; letter-spacing: 0.025em;">
                     ${p.place_name || 'Unnamed Location'}
                 </p>
-                <p style="margin:0; font-size:8px; color:#64748b; font-weight:600; text-transform:uppercase;">
-                    ${p.category || 'Location'}
-                </p>
+                <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+                    <span style="height: 4px; width: 4px; border-radius: 50%; background: ${p.status === 'done' ? '#10b981' : '#f59e0b'};"></span>
+                    <p style="margin:0; font-family: inherit; font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">
+                        ${p.category || 'Location'}
+                    </p>
+                </div>
             </div>
-        `, { closeButton: false, offset: L.point(0, -8) });
+        `, { 
+            closeButton: false, 
+            offset: L.point(0, -10),
+            className: 'custom-map-popup'
+        });
 
+        // 7. Interaction: Clean mouseover behavior
         marker.on('mouseover', function() { this.openPopup(); });
         marker.on('mouseout', function() { this.closePopup(); });
+        
+        // 8. Action: Optional - Select location on click
+        marker.on('click', () => {
+            // If you want to center or trigger an action on click, add here
+            mapRef.current.setView([lat, lng], 13);
+        });
+
         marker.addTo(markersLayer.current);
     });
-};
+}, [places, filteredPlaces, debouncedSearch, selectedTrip]); 
+// Included selectedTrip so markers update instantly when added to a route
 
 const calculateRouteDistance = () => {
-    // 1. Identify the starting point using the same priority as the map
-    let startPoint = null;
-
-    if (manualHome) {
-        startPoint = L.latLng(manualHome.lat, manualHome.lng);
-    } else if (userCoords && userCoords.lat && userCoords.lng) {
-        startPoint = L.latLng(parseFloat(userCoords.lat), parseFloat(userCoords.lng));
-    } else {
-        // Fallback to HomePoint
-        startPoint = L.latLng(7.0911, 79.9161);
-    }
-
-    // 2. Safety check: If for some reason startPoint is still null, return 0
-    if (!startPoint) return "0.0";
-
-    const tripData = Array.isArray(selectedTrip[0]) ? selectedTrip[0] : selectedTrip;
+    // Uses the toggled sortCenter (Device or Home) as the origin
+    const startPoint = L.latLng(sortCenter.lat, sortCenter.lng);
+    
     let totalDistance = 0;
     let currentPos = startPoint;
 
-    // 3. Calculate cumulative distance
-    tripData.forEach((point) => {
-        if (point.latitude && point.longitude) {
-            const destination = L.latLng(parseFloat(point.latitude), parseFloat(point.longitude));
-            // distanceTo returns meters, so we divide by 1000 for KM
-            totalDistance += currentPos.distanceTo(destination) / 1000;
-            currentPos = destination;
-        }
+    selectedTrip.forEach((point) => {
+        const destination = L.latLng(parseFloat(point.latitude), parseFloat(point.longitude));
+        totalDistance += currentPos.distanceTo(destination) / 1000;
+        currentPos = destination;
     });
-
     return totalDistance.toFixed(1);
 };
 
@@ -1145,7 +1180,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                             <div className="relative flex items-center gap-2">
     {/* 1. Location Name Search */}
     <div className="relative flex items-center">
-        <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400"></i>
+        <Icon name="search" className="w-4 h-4" />
         <input 
             ref={autocompleteRef} 
             placeholder="Search Google Maps..." 
@@ -1168,7 +1203,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 onClick={saveStagedLocation} 
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 transition-all active:scale-95"
             >
-                <i data-lucide="plus" className="w-3 h-3"></i>
+                <Icon name="plus" className="w-3 h-3" />
                 Save Location
             </button>
 
@@ -1180,7 +1215,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 className="p-2 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl transition-colors"
                 title="Cancel"
             >
-                <i data-lucide="x" className="w-3.5 h-3.5"></i>
+                {<Icon name="x" className="w-3.5 h-3.5" />}
             </button>
         </div>
     )}
@@ -1192,136 +1227,163 @@ const handleSuggestionAction = async (suggestionId, action) => {
                     <main className="flex-1 overflow-hidden relative">
                         
                         {/* TAB 1: PLACES */}
-                        {activeTab === 'places' && (
-                            <div className="h-full flex flex-col">
-                                <div className="px-8 py-4 bg-white border-b border-slate-100 flex flex-wrap gap-4 shrink-0">
-                                    <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search Local..." className="w-48 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none" />
-                                    <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none">
-                                        <option value="All">All Categories</option>
-                                        {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none">
-                                        <option value="All">All Status</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="done">Completed</option>
-                                    </select>
-                                    
-                                    <select 
-    value={sortBy} 
-    onChange={(e) => setSortBy(e.target.value)} 
-    className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none"
->
-    <option value="newest">Newest First</option>
-    <option value="distance">Nearest First</option>
-</select>
+{activeTab === 'places' && (
+    <div className="h-full flex flex-col">
+        {/* Filters & Control Header */}
+        <div className="px-8 py-4 bg-white border-b border-slate-100 flex flex-wrap items-center gap-4 shrink-0">
+            <div className="relative">
+                {React.createElement(Icon, { name: 'search', className: 'w-4 h-4' })}
+                <input 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                    placeholder="Search Local..." 
+                    className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none focus:border-indigo-400 transition-all w-48" 
+                />
+            </div>
 
-                                </div>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
+                <option value="All">All Categories</option>
+                {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
 
-                                <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                                        {processedPlaces.map(p => (
-                                            <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative">
-                                                {/* Image Cover */}
-<div className="h-32 bg-slate-200 relative shrink-0">
-    {p.cover_photo_url ? (
-        <img src={p.cover_photo_url} alt="Cover" className="w-full h-full object-cover" />
-    ) : (
-        <div className="w-full h-full flex items-center justify-center text-slate-400">
-            <i data-lucide="image" className="w-6 h-6"></i>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
+                <option value="All">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="done">Completed</option>
+            </select>
+
+            <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>         
+
+            <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)} 
+                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100"
+            >
+                <option value="newest">Newest First</option>
+                <option value="distance">Nearest First</option>
+            </select>
+            
+            {/* Manual Location Toggle */}
+            <button 
+                onClick={() => setLocationSource(prev => prev === 'device' ? 'home' : 'device')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                    locationSource === 'device' 
+                    ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                    : 'bg-amber-50 border-amber-200 text-amber-600'
+                }`}
+            >
+                {<Icon name={locationSource === 'device' ? 'navigation' : 'home'} className="w-3.5 h-3.5" />}
+                {locationSource === 'device' ? 'Live GPS' : 'Home Base'}
+            </button>
+            
         </div>
-    )}
-    
-    {/* Delete Button (New) */}
-    <button 
-        onClick={() => deleteLocation(p.id, p.place_name)}
-        className="absolute top-2 left-2 p-1.5 bg-white/80 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-md transition-all opacity-0 group-hover:opacity-100"
-    >
-        <Icon name="trash-2" className="w-3.5 h-3.5" />
-    </button>
 
-    {/* Status Toggle */}
-    <button 
-    onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} 
-    className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 select-none outline-none ${
-        p.status === 'done' 
-            ? 'bg-emerald-500 text-white' 
-            : 'bg-white text-orange-500'
-    }`}
->
-    <div className="flex items-center gap-1">
-        <i 
-            data-lucide={p.status === 'done' ? 'check-circle' : 'circle'} 
-            className="w-2.5 h-2.5"
-        ></i>
-        {p.status}
-    </div>
-</button>
-</div>
-                                                
-   {/* Body Editables */}
-  <div className="p-4 flex-1 flex flex-col gap-2">
-   <input 
-    type="text"
-    defaultValue={p.place_name} 
-    onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-            e.target.blur(); // Triggers the onBlur logic below
-        }
-    }}
-    onBlur={(e) => {
-        const newName = e.target.value.trim();
-        if (newName && newName !== p.place_name) {
-            updatePlaceField(p.id, 'place_name', newName);
-        }
-    }} 
-    className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full"
-    title="Edit Name - Press Enter to Save"
-/>
-  <div className="flex flex-col gap-1 px-1">
-    {/* Locality Edit (Updated to match Name Edit style) */}
-    <div className="flex items-center gap-1 -ml-1">
-        <i data-lucide="map-pin" className="w-3 h-3 text-slate-400 shrink-0"></i>
-        <input 
-            type="text" 
-            defaultValue={p.locality || ''} 
-            placeholder="Unknown Locality"
-            onBlur={(e) => updatePlaceField(p.id, 'locality', e.target.value)} 
-            className="text-[9px] font-bold text-slate-400 uppercase bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full truncate" 
-            title="Edit Locality - Press Enter to Save"/>
-    </div>
-    
-    {/* Display Distance */}
-    <p className="text-[9px] font-black text-indigo-500 uppercase flex items-center gap-1">
-        <i data-lucide="navigation-2" className="w-3 h-3"></i> 
-        {p.distance_km ? `${p.distance_km} KM Away` : 'Calculating...'}
-    </p>
-</div>
-                                                    <select 
-                                                        value={p.category} 
-                                                        onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)}
-                                                        className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer"
-                                                    >
-                                                        {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                                    </select>
-                                                </div>
-
-                                                {/* Footer Actions */}
-                                                <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-                                                    <div className="flex gap-1">
-                                                        <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo"><i data-lucide="camera" className="w-3.5 h-3.5"></i></button>
-                                                        <button onClick={() => promptForValue(p.id, 'photo_album_url', p.photo_album_url, 'Photo Album URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.photo_album_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Album Link"><i data-lucide="images" className="w-3.5 h-3.5"></i></button>
-                                                        <button onClick={() => promptForValue(p.id, 'ai_article', p.ai_article, 'AI Article Content')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.ai_article ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Article"><i data-lucide="file-text" className="w-3.5 h-3.5"></i></button>
-                                                    </div>
-                                                    <a href={p.google_maps_url || `https://maps.google.com/?q=${p.latitude},${p.longitude}`} target="_blank" className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors" title="Open in Maps">
-                                                        <i data-lucide="navigation" className="w-3.5 h-3.5"></i>
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+        {/* Places Grid */}
+        <div className="flex-1 overflow-y-auto p-8 no-scrollbar bg-slate-50/50">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                {(processedPlaces || []).map(p => (
+                    <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative hover:shadow-md transition-all">
+                        
+                        {/* Image Cover Section */}
+                        <div className="h-32 bg-slate-200 relative shrink-0 overflow-hidden">
+                            {p.cover_photo_url ? (
+                                <img src={p.cover_photo_url} alt="Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                    {<Icon name="image" className="w-6 h-6" />}
                                 </div>
+                            )}
+                            
+                            {/* Delete Button */}
+                            <button 
+                                onClick={() => deleteLocation(p.id, p.place_name)}
+                                className="absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                            >
+                                <Icon name="trash-2" className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Status Toggle */}
+                            <button 
+                                onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} 
+                                className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 select-none outline-none ${
+                                    p.status === 'done' 
+                                        ? 'bg-emerald-500 text-white' 
+                                        : 'bg-white/90 text-orange-500'
+                                }`}
+                            >
+                                <div className="flex items-center gap-1">
+                                    <Icon name={p.status === 'done' ? 'check-circle' : 'circle'} className="w-2.5 h-2.5" />
+                                    {p.status}
+                                </div>
+                            </button>
+                        </div>
+                                                
+                        {/* Body Details */}
+                        <div className="p-4 flex-1 flex flex-col gap-2">
+                            <input 
+                                type="text"
+                                defaultValue={p.place_name} 
+                                onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                onBlur={(e) => {
+                                    const newName = e.target.value.trim();
+                                    if (newName && newName !== p.place_name) updatePlaceField(p.id, 'place_name', newName);
+                                }} 
+                                className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full"
+                            />
+
+                            <div className="flex flex-col gap-1 px-1">
+                                {/* Locality Edit */}
+                                <div className="flex items-center gap-1 -ml-1">
+                                   <Icon name="map-pin" className="w-3 h-3" />
+                                    <input 
+                                        type="text" 
+                                        defaultValue={p.locality || ''} 
+                                        placeholder="Unknown Locality"
+                                        onBlur={(e) => updatePlaceField(p.id, 'locality', e.target.value)} 
+                                        className="text-[9px] font-bold text-slate-400 uppercase bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full truncate" 
+                                    />
+                                </div>
+                                
+                                {/* Dynamic Distance (Based on Toggle) */}
+                                <p className={`text-[9px] font-black uppercase flex items-center gap-1 ${locationSource === 'device' ? 'text-blue-500' : 'text-amber-600'}`}>
+                                    {<Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3 h-3" />}
+                                    {p.distance_km ? `${p.distance_km} KM` : '...'} 
+                                    <span className="text-[7px] opacity-70">({locationSource === 'device' ? 'Near You' : 'From Home'})</span>
+                                </p>
                             </div>
-                        )}
+
+                            <select 
+                                value={p.category} 
+                                onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)}
+                                className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
+                            >
+                                {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+                            <div className="flex gap-1">
+                                <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo">
+                                    {<Icon name="camera" className="w-3.5 h-3.5" />}
+                                </button>
+                                <button onClick={() => promptForValue(p.id, 'photo_album_url', p.photo_album_url, 'Photo Album URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.photo_album_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Album Link">
+                                    {<Icon name="images" className="w-3.5 h-3.5" />}
+                                </button>
+                                <button onClick={() => promptForValue(p.id, 'ai_article', p.ai_article, 'AI Article Content')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.ai_article ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Article">
+                                    {<Icon name="file-text" className="w-3.5 h-3.5" />}
+                                </button>
+                            </div>
+                            <a href={p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors" title="Open in Maps">
+                                <Icon name="navigation" className="w-3.5 h-3.5" />
+                            </a>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+)}
 
            {/* TAB 2: MAP - Static HomePoint Routing Version */}
 <div className={`flex h-full ${activeTab === 'map' ? 'flex' : 'hidden'}`}>
@@ -1422,7 +1484,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                                     <span className="text-[9px] font-black uppercase truncate text-slate-800">{idx + 1}. {t.place_name}</span>
                                     <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
                                 </div>
-                                <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
+                                <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-rose-500"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
                             </div>
 
                             <div className="min-h-[26px] mt-2 border-t border-slate-50 pt-2">
@@ -1460,7 +1522,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
         <div className="flex-1 flex flex-col min-h-0 bg-white">
             <div className="p-4 bg-white border-b border-slate-50 shadow-sm">
                 <div className="relative">
-                    <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400"></i>
+                    {React.createElement(Icon, { name: 'search', className: 'w-4 h-4' })}
                     <input 
                         type="text" 
                         placeholder="Search nearby locations..." 
@@ -1490,7 +1552,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                                 }} 
                                 className="text-emerald-500 hover:bg-emerald-50 p-2 rounded-lg active:scale-90"
                             >
-                                <i data-lucide="plus-circle" className="w-4 h-4"></i>
+                                {<Icon name="plus-circle" className="w-4 h-4" />}
                             </button>
                         </div>
                     );
@@ -1529,7 +1591,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all group active:scale-95"
                 title="Refresh Data"
             >
-                <i data-lucide="refresh-cw" className="w-5 h-5 text-indigo-600 group-hover:rotate-180 transition-transform duration-500"></i>
+                {<Icon name="refresh-cw" className="w-5 h-5 text-indigo-600 group-hover:rotate-180 transition-transform duration-500" />}
             </button>
         </div>
 
@@ -1543,7 +1605,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
             <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Total Visits</p>
             <p className="text-5xl font-black italic">{dashboardStats.totalVisits}</p>
         </div>
-        <i data-lucide="globe-2" className="w-8 h-8 text-slate-700"></i>
+        {<Icon name="globe-2" className="w-8 h-8 text-slate-700" />}
     </div>
     
     <div className="grid grid-cols-3 gap-6 relative z-10">
@@ -1595,7 +1657,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                         <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
                         <p className="text-4xl font-black italic">{dashboardStats.likesSummary.reduce((acc, curr) => acc + curr.hits, 0)} <span className="text-sm opacity-60">Likes</span></p>
                     </div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><i data-lucide="heart" className="w-5 h-5 fill-white text-white"></i></div>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">{<Icon name="heart" className="w-5 h-5 fill-white text-white" />}</div>
                 </div>
                 <div className="grid grid-cols-1 gap-2 bg-black/10 p-4 rounded-2xl">
                     <p className="text-[8px] font-black uppercase text-pink-200 mb-1">Most Liked Locations</p>
@@ -1614,7 +1676,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
             <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
-                        <i data-lucide="message-square" className="w-4 h-4"></i> Pending Comments
+                        {<Icon name="message-square" className="w-4 h-4" />} Pending Comments
                     </h2>
                     <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
                         {allComments.filter(c => !c.reply_text).length}
@@ -1653,7 +1715,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
             <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
-                        <i data-lucide="shield-alert" className="w-4 h-4"></i> Suggestions
+                        {<Icon name="shield-alert" className="w-4 h-4" />} Suggestions
                     </h2>
                     <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
                         {pendingApprovals.length}
