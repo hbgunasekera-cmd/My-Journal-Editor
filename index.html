@@ -217,6 +217,22 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
         ></span>
     );
 });
+
+const MetricColumn = ({ title, data, highlight = false }) => (
+    <div className="min-w-0">
+        <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">{title}</p>
+        <div className="space-y-2 max-h-28 overflow-y-auto no-scrollbar">
+            {(data || []).map(([name, count]) => (
+                <div key={name} className="flex justify-between text-[10px] font-bold group">
+                    <span className={`truncate pr-2 ${highlight && name !== 'Direct' ? 'text-indigo-400' : 'text-slate-400'} group-hover:text-white transition-colors`}>
+                        {name}
+                    </span>
+                    <span className="text-white font-black">{count}</span>
+                </div>
+            ))}
+        </div>
+    </div>
+);
         
         function App() {
 
@@ -1013,63 +1029,86 @@ const toggleStatus = (id, currentStatus) => {
             // --- TAB 3: DASHBOARD FUNCTIONS ---
 
 const dashboardStats = React.useMemo(() => {
-    // 1. Safety Guards
     const safeAnalytics = Array.isArray(analyticsData) ? analyticsData : [];
-    const safeLikes = Array.isArray(likesData) ? likesData : [];
+    
+    const parseUA = (uaString = "") => {
+        const ua = uaString;
+        const lowerUA = ua.toLowerCase();
+        
+        // 1. Bot Detection
+        const botPatterns = ['bot', 'spider', 'crawl', 'lighthouse', 'slurp', 'facebookexternalhit', 'twitterbot'];
+        const isBot = botPatterns.some(pattern => lowerUA.includes(pattern));
 
-    // Helper: Aggregates a specific key and returns an array sorted by count (DESC)
+        // 2. Device Type
+        let type = 'Desktop';
+        if (lowerUA.includes('tablet') || lowerUA.includes('ipad')) type = 'Tablet';
+        else if (lowerUA.includes('mobile') || lowerUA.includes('android') || lowerUA.includes('iphone')) type = 'Mobile';
+
+        // 3. Brand & Model (Revised for Mobile vs. Desktop)
+        let model = 'Desktop'; 
+        if (type === 'Mobile' || type === 'Tablet') {
+            if (ua.includes('iPhone') || ua.includes('iPad')) {
+                model = ua.includes('iPhone') ? 'iPhone' : 'iPad';
+            } else {
+                const match = ua.match(/\(([^)]+)\)/);
+                if (match && match[1]) {
+                    const segments = match[1].split(';');
+                    const potentialModel = segments[segments.length - 1].trim();
+                    model = potentialModel.includes('Build') ? potentialModel.split('Build')[0].trim() : potentialModel;
+                } else {
+                    model = 'Mobile Device';
+                }
+            }
+        }
+
+        // 4. OS detection
+        let os = 'Other';
+        if (ua.includes('Windows')) os = 'Windows';
+        else if (ua.includes('Android')) os = 'Android';
+        else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+        else if (ua.includes('Mac OS')) os = 'macOS';
+        else if (ua.includes('Linux')) os = 'Linux';
+
+        // 5. App Source
+        let source = "Direct";
+        if (ua.includes('FBAN') || ua.includes('FBAV')) source = 'Facebook';
+        else if (ua.includes('Instagram')) source = 'Instagram';
+        else if (ua.includes('TikTok')) source = 'Tiktok';
+        else if (ua.includes('Messenger')) source = 'Messenger';
+
+        return { type, source, os, model, isBot };
+    };
+
     const getSortedMetrics = (data, keyOrFn) => {
         const counts = data.reduce((acc, item) => {
-            let val;
-            if (typeof keyOrFn === 'function') {
-                val = keyOrFn(item);
-            } else {
-                val = item[keyOrFn] || 'Unknown';
-            }
+            const val = typeof keyOrFn === 'function' ? keyOrFn(item) : (item[keyOrFn] || 'Unknown');
             acc[val] = (acc[val] || 0) + 1;
             return acc;
         }, {});
-
         return Object.entries(counts).sort((a, b) => b[1] - a[1]);
     };
 
-    // 2. Process Geography (Sorted Highest to Lowest)
-    const countryStats = getSortedMetrics(safeAnalytics, 'country');
-    const cityStats = getSortedMetrics(safeAnalytics, 'city');
+    const parsedData = safeAnalytics.map(v => ({ ...v, ...parseUA(v.user_agent) }));
 
-    // 3. Process Device Types (Sorted Highest to Lowest)
-    const deviceStats = getSortedMetrics(safeAnalytics, (v) => {
-        const ua = (v.user_agent || "").toLowerCase();
-        if (ua.includes('tablet') || ua.includes('ipad')) return 'Tablet';
-        if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) return 'Mobile';
-        return 'Desktop/Laptop';
-    });
-
-    // 4. Process Likes Summary (Sorted by Hits)
-    const likesMap = {};
-    safeLikes.forEach(l => {
-        const locName = l.travel_bucket_list?.place_name || 'Unknown Location';
-        if (!likesMap[locName]) {
-            likesMap[locName] = { 
-                name: locName, 
-                hits: 0, 
-                city: l.city || 'N/A', 
-                country: l.country || 'N/A' 
-            };
-        }
-        likesMap[locName].hits += 1;
-    });
-
-    const likesSummary = Object.values(likesMap).sort((a, b) => b.hits - a.hits);
-
-    return { 
+    return {
         totalVisits: safeAnalytics.length,
-        deviceStats, // Array: [['Mobile', 10], ['Desktop', 5]]
-        cityStats,   // Array: [['Colombo', 15], ['Kandy', 3]]
-        countryStats, // Array: [['Sri Lanka', 18], ['USA', 1]]
-        likesSummary 
+        countries: getSortedMetrics(parsedData, 'country'),
+        regions: getSortedMetrics(parsedData, 'region'),
+        cities: getSortedMetrics(parsedData, 'city'),
+        sources: getSortedMetrics(parsedData, 'source'),
+        deviceTypes: getSortedMetrics(parsedData, 'type'),
+        models: getSortedMetrics(parsedData, 'model'),
+        os: getSortedMetrics(parsedData, 'os'),
+        trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
+        likesSummary: (Array.isArray(likesData) ? likesData : []).reduce((acc, l) => {
+            const locName = l.travel_bucket_list?.place_name || 'Unknown';
+            const existing = acc.find(x => x.name === locName);
+            if (existing) existing.hits += 1; else acc.push({ name: locName, hits: 1 });
+            return acc;
+        }, []).sort((a, b) => b.hits - a.hits)
     };
 }, [analyticsData, likesData]);
+
 
 // --- DASHBOARD ACTIONS (Comments & Suggestions) ---
 
@@ -1582,96 +1621,78 @@ const handleSuggestionAction = async (suggestionId, action) => {
 {activeTab === 'dashboard' && (
     <div className="h-full overflow-y-auto p-8 no-scrollbar bg-slate-50">
         
-        {/* DASHBOARD HEADER WITH REFRESH BUTTON */}
+        {/* HEADER */}
         <div className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
             <div>
                 <h1 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter">System Overview</h1>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Real-time journal analytics</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Real-time journal analytics</p>
             </div>
-            
-            <button 
-    onClick={async (e) => {
-        const btn = e.currentTarget;
-        const icon = btn.querySelector('span'); // Target the icon wrapper
-        icon.classList.add('animate-spin'); 
-        await refreshAllData();
-        if (window.lucide) window.lucide.createIcons();
-        triggerToast("Data Synchronized");
-        setTimeout(() => icon.classList.remove('animate-spin'), 600);
-    }}
-    className="w-12 h-12 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-md transition-all flex items-center justify-center group active:scale-95"
-    title="Refresh Data"
->
-    <Icon name="refresh-cw" className="w-5 h-5 text-indigo-600 transition-colors" />
-</button>
+            <button onClick={refreshAllData} className="w-12 h-12 bg-white border border-slate-200 rounded-full shadow-sm flex items-center justify-center hover:shadow-md transition-all active:scale-95 group">
+                <Icon name="refresh-cw" className="w-5 h-5 text-indigo-600 group-active:animate-spin" />
+            </button>
         </div>
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
             
-            {/* 1. Page Visits Block (Updated to 3 Columns with Sorted Data) */}
-<div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
-    <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
-    <div className="flex justify-between items-end mb-8 relative z-10">
-        <div>
-            <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Total Visits</p>
-            <p className="text-5xl font-black italic">{dashboardStats.totalVisits}</p>
-        </div>
-        {<Icon name="globe-2" className="w-8 h-8 text-slate-700" />}
-    </div>
-    
-    <div className="grid grid-cols-3 gap-6 relative z-10">
-        {/* Countries Column */}
-        <div>
-            <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1 tracking-wider">Countries</p>
-            <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
-                {(dashboardStats.countryStats || []).map(([name, count]) => (
-                    <div key={name} className="flex justify-between text-[10px] font-bold text-slate-300">
-                        <span className="truncate pr-2">{name}</span>
-                        <span className="text-white font-black">{count}</span>
+            {/* 1. PAGE VISITS BLOCK (9 METRICS CONSOLIDATED) */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
+                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
+                
+                <div className="flex justify-between items-end mb-10 relative z-10">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
+                        <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
                     </div>
-                ))}
-            </div>
-        </div>
-
-        {/* Cities Column */}
-        <div>
-            <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1 tracking-wider">Cities</p>
-            <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
-                {(dashboardStats.cityStats || []).map(([name, count]) => (
-                    <div key={name} className="flex justify-between text-[10px] font-bold text-slate-300">
-                        <span className="truncate pr-2">{name}</span>
-                        <span className="text-white font-black">{count}</span>
+                    <div className="text-right flex flex-col items-end">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
+                        <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                            <span className="text-emerald-400 font-black italic text-sm">
+                                {dashboardStats.totalVisits > 0 ? Math.round(((dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0) / dashboardStats.totalVisits) * 100) : 0}%
+                            </span>
+                            <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
+                        </div>
                     </div>
-                ))}
-            </div>
-        </div>
-
-        {/* Devices Column */}
-        <div>
-            <p className="text-[9px] font-black uppercase text-slate-400 mb-3 border-b border-slate-700 pb-1 tracking-wider">Devices</p>
-            <div className="space-y-2 max-h-32 overflow-y-auto no-scrollbar">
-                {(dashboardStats.deviceStats || []).map(([name, count]) => (
-                    <div key={name} className="flex justify-between text-[10px] font-bold text-slate-300">
-                        <span className="truncate pr-1" title={name}>{name}</span>
-                        <span className="text-white font-black">{count}</span>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
+                    <MetricColumn title="Countries" data={dashboardStats.countries} />
+                    <MetricColumn title="Regions" data={dashboardStats.regions} />
+                    <MetricColumn title="Cities" data={dashboardStats.cities} />
+                    <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />
+                    
+                    <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
+                    <MetricColumn title="Brand & Model" data={dashboardStats.models} />
+                    <MetricColumn title="Operating System" data={dashboardStats.os} />
+                    
+                    {/* Traffic Integrity Column */}
+                    <div>
+                        <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
+                        <div className="space-y-2">
+                            {dashboardStats.trafficType.map(([type, count]) => (
+                                <div key={type} className="flex justify-between items-center text-[10px] font-bold">
+                                    <span className={type === 'Real Person' ? 'text-emerald-400' : 'text-rose-400 opacity-60'}>
+                                        {type}
+                                    </span>
+                                    <span className="text-white font-black">{count}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                ))}
+                </div>
             </div>
-        </div>
-    </div>
-</div>
 
-            {/* 2. Likes Metrics Block */}
+            {/* 2. LIKES METRICS */}
             <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col justify-between">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
-                        <p className="text-4xl font-black italic">{dashboardStats.likesSummary.reduce((acc, curr) => acc + curr.hits, 0)} <span className="text-sm opacity-60">Likes</span></p>
+                        <p className="text-4xl font-black italic">{dashboardStats.likesSummary.reduce((a, b) => a + b.hits, 0)} <span className="text-sm opacity-60">Likes</span></p>
                     </div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">{<Icon name="heart" className="w-5 h-5 fill-white text-white" />}</div>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        <Icon name="heart" className="w-5 h-5 fill-white text-white" />
+                    </div>
                 </div>
-                <div className="grid grid-cols-1 gap-2 bg-black/10 p-4 rounded-2xl">
-                    <p className="text-[8px] font-black uppercase text-pink-200 mb-1">Most Liked Locations</p>
+                <div className="bg-black/10 p-4 rounded-2xl">
                     <div className="max-h-32 overflow-y-auto no-scrollbar space-y-2">
                         {dashboardStats.likesSummary.slice(0, 5).map((item, i) => (
                             <div key={i} className="flex justify-between items-center border-b border-white/10 pb-1">
@@ -1683,11 +1704,11 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 </div>
             </div>
 
-            {/* 3. Pending Comments Block */}
+            {/* 3. PENDING COMMENTS */}
             <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
-                        {<Icon name="message-square" className="w-4 h-4" />} Pending Comments
+                        <Icon name="message-square" className="w-4 h-4" /> Pending Comments
                     </h2>
                     <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
                         {allComments.filter(c => !c.reply_text).length}
@@ -1702,31 +1723,22 @@ const handleSuggestionAction = async (suggestionId, action) => {
                             </div>
                             <p className="text-xs text-slate-700 font-medium italic mb-3">"{c.comment_text}"</p>
                             <div className="flex gap-2">
-                                <input 
-                                    id={`reply-input-${c.id}`}
-                                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400"
-                                    placeholder="Type reply..."
-                                />
-                                <button 
-                                    onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} 
-                                    className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700"
-                                >
-                                    Reply
-                                </button>
+                                <input id={`reply-input-${c.id}`} className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" placeholder="Type reply..." />
+                                <button onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700">Reply</button>
                             </div>
                         </div>
                     ))}
                     {allComments.filter(c => !c.reply_text).length === 0 && (
-                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">All caught up!</p>
+                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No New Comments</p>
                     )}
                 </div>
             </div>
 
-            {/* 4. Suggestions / Pending Approvals */}
+            {/* 4. SUGGESTIONS */}
             <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
-                        {<Icon name="shield-alert" className="w-4 h-4" />} Suggestions
+                        <Icon name="shield-alert" className="w-4 h-4" /> Suggestions
                     </h2>
                     <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
                         {pendingApprovals.length}
@@ -1740,27 +1752,16 @@ const handleSuggestionAction = async (suggestionId, action) => {
                                 <p className="text-[8px] font-bold text-slate-500 mt-0.5">{a.category || 'Location'}</p>
                             </div>
                             <div className="flex gap-2">
-                                <button 
-                                    onClick={() => handleSuggestionAction(a.id, 'approved')} 
-                                    className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform"
-                                >
-                                    Approve
-                                </button>
-                                <button 
-                                    onClick={() => handleSuggestionAction(a.id, 'rejected')} 
-                                    className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200"
-                                >
-                                    Dismiss
-                                </button>
+                                <button onClick={() => handleSuggestionAction(a.id, 'approved')} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform">Approve</button>
+                                <button onClick={() => handleSuggestionAction(a.id, 'rejected')} className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200">Dismiss</button>
                             </div>
                         </div>
                     ))}
                     {pendingApprovals.length === 0 && (
-                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No pending audits</p>
+                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No Pending Audits</p>
                     )}
                 </div>
             </div>
-            
         </div>
     </div>
 )}
