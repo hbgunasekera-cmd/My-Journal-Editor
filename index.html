@@ -258,6 +258,7 @@ const autocompleteRef = useRef(null);
 const lastDrawnCoords = React.useRef(null);
 const [qrUrl, setQrUrl] = React.useState('');
 
+
 // --- 1. ICON SYSTEM ---
 
 // --- 1. REFACTORED ICON SYSTEM ---
@@ -1580,19 +1581,20 @@ const handleSuggestionAction = async (suggestionId, action) => {
             </div>
             
             <button 
-                onClick={async (e) => {
-                    const btn = e.currentTarget;
-                    btn.classList.add('animate-spin'); 
-                    await refreshAllData();
-                    if (window.lucide) window.lucide.createIcons();
-                    triggerToast("Data Synchronized");
-                    setTimeout(() => btn.classList.remove('animate-spin'), 600);
-                }}
-                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all group active:scale-95"
-                title="Refresh Data"
-            >
-                {<Icon name="refresh-cw" className="w-5 h-5 text-indigo-600 group-hover:rotate-180 transition-transform duration-500" />}
-            </button>
+    onClick={async (e) => {
+        const btn = e.currentTarget;
+        const icon = btn.querySelector('span'); // Target the icon wrapper
+        icon.classList.add('animate-spin'); 
+        await refreshAllData();
+        if (window.lucide) window.lucide.createIcons();
+        triggerToast("Data Synchronized");
+        setTimeout(() => icon.classList.remove('animate-spin'), 600);
+    }}
+    className="w-12 h-12 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-md transition-all flex items-center justify-center group active:scale-95"
+    title="Refresh Data"
+>
+    <Icon name="refresh-cw" className="w-5 h-5 text-indigo-600 transition-colors" />
+</button>
         </div>
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
