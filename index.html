@@ -1278,7 +1278,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 }`}
             >
                 {<Icon name={locationSource === 'device' ? 'navigation' : 'home'} className="w-3.5 h-3.5" />}
-                {locationSource === 'device' ? 'Live GPS' : 'Home Base'}
+                {locationSource === 'device' ? 'Live GPS' : 'Home'}
             </button>
             
         </div>
@@ -1473,7 +1473,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                     <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border transition-colors ${locationSource === 'device' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${locationSource === 'device' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                         <span className={`text-[7px] font-black uppercase ${locationSource === 'device' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            {locationSource === 'device' ? 'GPS' : 'Home Based'}
+                            {locationSource === 'device' ? 'GPS' : 'Home'}
                         </span>
                     </div>
                 </div>
@@ -1481,7 +1481,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                     {selectedTrip.length > 0 && (
                         <button onClick={() => setSelectedTrip([])} className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase">Clear</button>
                     )}
-                    <button onClick={handleSaveRoute} disabled={selectedTrip.length < 1} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase disabled:opacity-50 shadow-lg shadow-indigo-200">Save Plan</button>
+                    <button onClick={handleSaveRoute} disabled={selectedTrip.length < 1} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase disabled:opacity-50 shadow-lg shadow-indigo-200">Save</button>
                 </div>
             </div>
 
