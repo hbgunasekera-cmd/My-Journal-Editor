@@ -1465,7 +1465,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
             </div>
         </div>
 
-        {/* 2. Active Trip Planner Section */}
+        {/* 2. Active Trip Planner Section (Updated with Weather Icons) */}
         <div className="p-4 border-b border-slate-100 bg-indigo-50/30">
             <div className="flex justify-between items-end mb-3">
                 <div className="flex items-center gap-2">
@@ -1484,19 +1484,35 @@ const handleSuggestionAction = async (suggestionId, action) => {
             </div>
 
             <div className="space-y-2">
-                {selectedTrip.map((t, idx) => (
-                    <div key={`${t.id}-${idx}`} className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm">
-                        <div className="flex justify-between items-start">
-                            <div className="flex flex-col truncate">
-                                <span className="text-[9px] font-black uppercase truncate text-slate-800">{idx + 1}. {t.place_name}</span>
-                                <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
+                {selectedTrip.map((t, idx) => {
+                    const weather = weatherData[t.place_name];
+                    return (
+                        <div key={`${t.id}-${idx}`} className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm">
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-3 truncate">
+                                    {/* Weather Icon & Temp */}
+                                    {weather && (
+                                        <div className="flex flex-col items-center shrink-0 bg-slate-50 px-1.5 py-1 rounded-lg border border-slate-100">
+                                            <img 
+                                                src={`https://openweathermap.org/img/wn/${weather.icon}.png`} 
+                                                alt="weather" 
+                                                className="w-6 h-6 object-contain"
+                                            />
+                                            <span className="text-[7px] font-black text-slate-600 leading-none">{Math.round(weather.temp)}°C</span>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col truncate">
+                                        <span className="text-[9px] font-black uppercase truncate text-slate-800">{idx + 1}. {t.place_name}</span>
+                                        <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
+                                    </div>
+                                </div>
+                                <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-rose-500 ml-2">
+                                    <Icon name="trash-2" className="w-3.5 h-3.5" />
+                                </button>
                             </div>
-                            <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-rose-500">
-                                <Icon name="trash-2" className="w-3.5 h-3.5" />
-                            </button>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
 
