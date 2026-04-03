@@ -1390,7 +1390,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
     </div>
 )}
 
-       {/* TAB 2: MAP */}
+      {/* TAB 2: MAP */}
 <div className={`flex h-full w-full ${activeTab === 'map' ? 'flex' : 'hidden'} flex-col md:flex-row overflow-hidden`}>
     
     {/* MAP CONTAINER - Top on Mobile (40%), Right on Desktop */}
@@ -1465,21 +1465,23 @@ const handleSuggestionAction = async (suggestionId, action) => {
             </div>
         </div>
 
-        {/* 2. Active Trip Planner Section (Updated with Weather Icons) */}
+        {/* 2. Active Trip Planner Section */}
         <div className="p-4 border-b border-slate-100 bg-indigo-50/30">
             <div className="flex justify-between items-end mb-3">
                 <div className="flex items-center gap-2">
                     <p className="text-[10px] font-black uppercase text-indigo-700">Trip Sequence ({selectedTrip.length})</p>
                     <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border transition-colors ${locationSource === 'device' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${locationSource === 'device' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                        <span className={`text-[7px] font-black uppercase ${locationSource === 'device' ? 'text-emerald-700' : 'text-amber-700'}`}>{locationSource === 'device' ? 'GPS' : 'Home'}</span>
+                        <span className={`text-[7px] font-black uppercase ${locationSource === 'device' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {locationSource === 'device' ? 'GPS' : 'Home Based'}
+                        </span>
                     </div>
                 </div>
                 <div className="flex gap-2">
                     {selectedTrip.length > 0 && (
                         <button onClick={() => setSelectedTrip([])} className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] font-black uppercase">Clear</button>
                     )}
-                    <button onClick={handleSaveRoute} disabled={selectedTrip.length < 1} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase shadow-lg shadow-indigo-200 disabled:opacity-50">Save</button>
+                    <button onClick={handleSaveRoute} disabled={selectedTrip.length < 1} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase disabled:opacity-50 shadow-lg shadow-indigo-200">Save Plan</button>
                 </div>
             </div>
 
@@ -1487,28 +1489,44 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 {selectedTrip.map((t, idx) => {
                     const weather = weatherData[t.place_name];
                     return (
-                        <div key={`${t.id}-${idx}`} className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm">
+                        <div key={`${t.id}-${idx}`} className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm group">
                             <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-3 truncate">
-                                    {/* Weather Icon & Temp */}
-                                    {weather && (
-                                        <div className="flex flex-col items-center shrink-0 bg-slate-50 px-1.5 py-1 rounded-lg border border-slate-100">
-                                            <img 
-                                                src={`https://openweathermap.org/img/wn/${weather.icon}.png`} 
-                                                alt="weather" 
-                                                className="w-6 h-6 object-contain"
-                                            />
-                                            <span className="text-[7px] font-black text-slate-600 leading-none">{Math.round(weather.temp)}°C</span>
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col truncate">
-                                        <span className="text-[9px] font-black uppercase truncate text-slate-800">{idx + 1}. {t.place_name}</span>
-                                        <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
-                                    </div>
+                                <div className="flex flex-col truncate">
+                                    <span className="text-[9px] font-black uppercase truncate text-slate-800">{idx + 1}. {t.place_name}</span>
+                                    <span className="text-[7px] font-bold text-indigo-400 uppercase">{t.category || "Planned Stop"}</span>
                                 </div>
-                                <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-rose-500 ml-2">
+                                <button onClick={() => setSelectedTrip(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-rose-500">
                                     <Icon name="trash-2" className="w-3.5 h-3.5" />
                                 </button>
+                            </div>
+
+                            {/* Weather Row */}
+                            <div className="min-h-[26px] mt-2 border-t border-slate-50 pt-2">
+                                {weather ? (
+                                    <div className="flex items-center gap-2">
+                                        {/* Current Badge */}
+                                        <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-100/50">
+                                            <WeatherIcon condition={weather.currentCond} />
+                                            <div className="flex flex-col leading-none">
+                                                <span className="text-[6px] font-black text-blue-400 uppercase tracking-tighter">Now</span>
+                                                <span className="text-[9px] font-bold text-blue-700">{Math.round(weather.current)}°C</span>
+                                            </div>
+                                        </div>
+                                        {/* Forecast Badge */}
+                                        <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                                            <div className="flex flex-col leading-none">
+                                                <span className="text-[6px] font-black text-slate-400 uppercase tracking-tighter">Forecast</span>
+                                                <span className="text-[9px] font-bold text-slate-600">{Math.round(weather.nextDay)}°C</span>
+                                            </div>
+                                            <span className="text-[7px] text-slate-400 font-bold uppercase border-l border-slate-200 pl-1.5">{weather.nextCond}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <div className="h-[22px] w-14 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
+                                        <div className="h-[22px] w-20 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
