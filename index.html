@@ -1403,20 +1403,33 @@ const handleSuggestionAction = async (suggestionId, action) => {
                                     </button>
 
                                     {/* Internal Gallery Photos (JSON Array / Comma Separated) */}
-                                    <button 
-                                        onClick={() => {
-                                            const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
-                                            const newVal = prompt("Enter Image URLs (comma separated):", current);
-                                            if (newVal !== null) {
-                                                const photoArray = newVal.split(',').map(s => s.trim()).filter(s => s !== "");
-                                                updatePlaceField(p.id, 'album_photos', photoArray);
-                                            }
-                                        }} 
-                                        className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`} 
-                                        title="Manage Internal Gallery"
-                                    >
-                                        <Icon name="layout-grid" className="w-3.5 h-3.5" />
-                                    </button>
+<button 
+    onClick={() => {
+        const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
+        const newVal = prompt("Enter Image URLs (comma separated) or Paste HTML Embed block:", current);
+        if (newVal !== null) {
+            let photoArray = [];
+            
+            // Regex to scrape lh3.googleusercontent links from raw HTML or text
+            const regex = /https:\/\/lh3\.googleusercontent\.com\/pw\/[^"'\s<>]+/g;
+            const extractedLinks = newVal.match(regex);
+
+            if (extractedLinks && extractedLinks.length > 0) {
+                // If HTML matches are found, use them and remove duplicates
+                photoArray = [...new Set(extractedLinks)];
+            } else {
+                // Otherwise, fallback to standard comma-separated parsing
+                photoArray = newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+            }
+            
+            updatePlaceField(p.id, 'album_photos', photoArray);
+        }
+    }} 
+    className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`} 
+    title="Manage Internal Gallery"
+>
+    <Icon name="layout-grid" className="w-3.5 h-3.5" />
+</button>
 
                                     {/* Edit External Album Link (Keep for legacy support) */}
                                     <button onClick={() => promptForValue(p.id, 'photo_album_url', p.photo_album_url, 'Legacy Google Photos Album URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.photo_album_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Legacy Album Link">
