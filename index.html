@@ -808,26 +808,51 @@ const manualEditArticle = (place) => {
 };
 
 const bulkGenerateArticles = async () => {
+    // 1. Filter for completed items without a story
     const pendingPlaces = places.filter(p => p.status === 'done' && !p.ai_article?.story);
-    if (pendingPlaces.length === 0) { showToast("No pending articles."); return; }
+    
+    if (pendingPlaces.length === 0) { 
+        triggerToast("No pending locations to generate."); 
+        return; 
+    }
 
-    if (!confirm(`Generate ${pendingPlaces.length} articles? Note: Free tier may pause for quota.`)) return;
+    const confirmMsg = `Ready to generate ${pendingPlaces.length} articles. \n\nNote: The script will automatically pause for 65 seconds if the Google Free Tier quota is reached. Continue?`;
+    if (!confirm(confirmMsg)) return;
+
+    triggerToast(`Starting bulk process for ${pendingPlaces.length} items...`);
 
     for (const place of pendingPlaces) {
-                await generateTravelArticle(place);
-                await new Promise(r => setTimeout(r, 4000));
-            } catch (err) {
+        try {
+            // Call individual generation logic
+            await generateTravelArticle(place);
             
-            if (err.message.includes("429") || err.message.includes("quota")) {
-                showToast("Quota hit! Waiting 60 seconds to resume...");
-                await new Promise(r => setTimeout(r, 65000));
-                await generateTravelArticle(place);
+            // Proactive delay: 4 seconds is the "sweet spot" for Gemini Free Tier
+            await new Promise(r => setTimeout(r, 4000)); 
+            
+        } catch (err) {
+            const errorMsg = err.message || "";
+            
+            // Handle Quota/Rate Limit (Error 429)
+            if (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit")) {
+                triggerToast("Quota reached. Resuming in 65s...");
+                
+                // Wait for the 60-second reset window + 5s safety buffer
+                await new Promise(r => setTimeout(r, 65000)); 
+                
+                try {
+                    // Retry the same location after the wait
+                    await generateTravelArticle(place);
+                } catch (retryErr) {
+                    console.error(`Retry failed for ${place.place_name}`);
+                }
             } else {
-                console.error(`Skipped ${place.place_name} due to other error.`);
+                console.error(`Skipping ${place.place_name}:`, errorMsg);
+                triggerToast(`Error at ${place.place_name}`);
             }
         }
     }
-    showToast("Bulk generation finished!");
+    
+    triggerToast("✨ All pending articles generated!");
 };
 
 
