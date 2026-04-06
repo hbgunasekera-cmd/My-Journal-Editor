@@ -705,10 +705,10 @@ useEffect(() => {
 };
 
 const generateTravelArticle = async (place) => {
-    // Using the stable Gemini 2.5 Flash model for 2026
+    
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-    // REVISED PROMPT: Removed drone and specific phone models
+    
     const contextPrompt = `Write a professional travel journal entry for a ${place.category} named "${place.place_name}" located in ${place.locality || 'Sri Lanka'}. 
     
     Technical Details to include: 
@@ -780,13 +780,17 @@ const saveArticleToDatabase = async (id, articleData) => {
 
         if (error) throw error;
 
-        // 4. Update local React state so the UI refreshes instantly
-        setPlaces(prev => prev.map(p => p.id === id ? { ...p, ai_article: articleData, status: 'done' } : p));
         
-        alert("Article successfully saved to your Journal!");
+        setPlaces(prev => prev.map(p => 
+            p.id === id ? { ...p, ai_article: articleData, status: 'done' } : p
+        ));
+        
+       
+        showToast("Journal entry successfully updated!");
+
     } catch (err) {
         console.error("Supabase Save Error:", err.message);
-        alert("Database update failed.");
+        showToast("Database update failed.");
     }
 };
 
