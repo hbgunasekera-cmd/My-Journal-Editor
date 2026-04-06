@@ -705,18 +705,20 @@ useEffect(() => {
 };
 
 const generateTravelArticle = async (place) => {
-    // UPDATED URL: Using gemini-1.5-pro for better stability on v1beta
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+    // 1. Switch to the STABLE v1 endpoint instead of v1beta
+    // 2. Use the base 'gemini-1.5-flash' name
+    const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-    const prompt = `Write a travel journal entry for ${place.place_name} in ${place.locality || 'Sri Lanka'}. 
+    const prompt = `Write a professional travel journal entry for "${place.place_name}" in ${place.locality || 'Sri Lanka'}. 
     Category: ${place.category}. 
-    Mention high-quality 4K 60fps footage captured on a DJI Neo 2 drone and iPhone 12 Pro.
-    Return ONLY a valid JSON object:
+    Include details about 4K 60fps drone videography with a DJI Neo 2 and iPhone 12 Pro photography.
+    
+    Return ONLY a JSON object:
     {
-      "title": "SEO Optimized Title",
-      "story": "300 word narrative",
-      "specs": "Technical location data",
-      "meta": "Short SEO description"
+      "title": "Catchy SEO Title",
+      "story": "A 300-word engaging story",
+      "specs": "Technical and location highlights",
+      "meta": "SEO meta description"
     }`;
 
     try {
@@ -725,26 +727,30 @@ const generateTravelArticle = async (place) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { 
-                    response_mime_type: "application/json",
-                    temperature: 0.7 
-                }
+                // Note: v1 stable sometimes prefers omitting response_mime_type 
+                // if you include "Return ONLY JSON" in the prompt.
             })
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || 'API Error');
+        const data = await response.json();
+
+        // AUDIT FIX: Better error handling to see EXACTLY what Google says
+        if (data.error) {
+            console.error("Google API Error Details:", data.error);
+            alert(`API Error (${data.error.code}): ${data.error.message}`);
+            return;
         }
 
-        const data = await response.json();
-        const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
+        // Clean the response: sometimes AI wraps JSON in ```json blocks
+        let rawText = data.candidates[0].content.parts[0].text;
+        const cleanJson = rawText.replace(/```json|```/g, "").trim();
+        const aiJson = JSON.parse(cleanJson);
         
         await saveArticleToDatabase(place.id, aiJson);
 
     } catch (err) {
-        console.error("AI Generation Failed:", err);
-        alert("Error: " + err.message);
+        console.error("Local Code Error:", err);
+        alert("Failed to generate: " + err.message);
     }
 };
 
