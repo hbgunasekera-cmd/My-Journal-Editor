@@ -808,33 +808,28 @@ const manualEditArticle = (place) => {
 };
 
 const bulkGenerateArticles = async () => {
-    // 1. Filter for places that are completed but don't have an article yet
-    // Or you can remove the !p.ai_article check if you want to overwrite everything
     const pendingPlaces = places.filter(p => p.status === 'done' && !p.ai_article?.story);
+    if (pendingPlaces.length === 0) { showToast("No pending articles."); return; }
 
-    if (pendingPlaces.length === 0) {
-        triggerToast("No pending completed locations found.");
-        return;
-    }
-
-    if (!confirm(`Found ${pendingPlaces.length} locations. Start bulk generation?`)) return;
-
-    triggerToast(`Starting bulk generation for ${pendingPlaces.length} items...`);
+    if (!confirm(`Generate ${pendingPlaces.length} articles? Note: Free tier may pause for quota.`)) return;
 
     for (const place of pendingPlaces) {
         try {
-            // Reusing your existing generation logic
             await generateTravelArticle(place);
-            
-            // Optional: Add a small delay to respect API quotas (1.5 seconds)
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Longer delay for Free Tier (3 seconds between requests)
+            await new Promise(r => setTimeout(r, 3000)); 
         } catch (err) {
-            console.error(`Failed at ${place.place_name}:`, err);
-            // We continue to the next one even if one fails
+            // Check if the error is a Quota/Rate Limit error (429)
+            if (err.message.includes("429") || err.message.includes("quota")) {
+                showToast("Quota hit! Waiting 60 seconds to resume...");
+                await new Promise(r => setTimeout(r, 65000)); // Wait 65 seconds
+                await generateTravelArticle(place); // Retry the failed one
+            } else {
+                console.error(`Skipped ${place.place_name} due to other error.`);
+            }
         }
     }
-
-    triggerToast("Bulk generation sequence complete.");
+    showToast("Bulk generation finished!");
 };
 
 
