@@ -705,10 +705,8 @@ useEffect(() => {
 };
 
 const generateTravelArticle = async (place) => {
-    
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-    
     const contextPrompt = `Write a professional travel journal entry for a ${place.category} named "${place.place_name}" located in ${place.locality || 'Sri Lanka'}. 
     
     Technical Details to include: 
@@ -727,9 +725,7 @@ const generateTravelArticle = async (place) => {
 
     const requestBody = {
         contents: [{
-            parts: [{
-                text: contextPrompt
-            }]
+            parts: [{ text: contextPrompt }]
         }],
         generationConfig: {
             response_mime_type: "application/json",
@@ -746,10 +742,10 @@ const generateTravelArticle = async (place) => {
 
         const data = await response.json();
 
+        // FIX: Throw error if API quota is exceeded or key is blocked
         if (data.error) {
-            console.error("Detailed Error:", data.error);
-            alert(`Google Says: ${data.error.message}`);
-            return;
+            console.error("Gemini API Error:", data.error.message);
+            throw new Error(data.error.message); 
         }
 
         if (!data.candidates || !data.candidates[0].content.parts[0].text) {
@@ -758,13 +754,13 @@ const generateTravelArticle = async (place) => {
 
         const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
         
-        // Save the cleaned article to Supabase
+        // Save to Supabase (this function now uses triggerToast internally)
         await saveArticleToDatabase(place.id, aiJson);
-        
 
     } catch (err) {
-        console.error("Fetch Error:", err);
-        alert("Error: " + err.message);
+        // Log locally, but re-throw so bulkGenerateArticles can catch it
+        console.error("Fetch Error:", err.message);
+        throw err; 
     }
 };
 
@@ -808,51 +804,31 @@ const manualEditArticle = (place) => {
 };
 
 const bulkGenerateArticles = async () => {
-    // 1. Filter for completed items without a story
     const pendingPlaces = places.filter(p => p.status === 'done' && !p.ai_article?.story);
-    
-    if (pendingPlaces.length === 0) { 
-        triggerToast("No pending locations to generate."); 
-        return; 
-    }
+    if (pendingPlaces.length === 0) { triggerToast("No pending articles."); return; }
 
-    const confirmMsg = `Ready to generate ${pendingPlaces.length} articles. \n\nNote: The script will automatically pause for 65 seconds if the Google Free Tier quota is reached. Continue?`;
-    if (!confirm(confirmMsg)) return;
-
-    triggerToast(`Starting bulk process for ${pendingPlaces.length} items...`);
+    triggerToast(`Processing ${pendingPlaces.length} items...`);
 
     for (const place of pendingPlaces) {
-        try {
-            // Call individual generation logic
-            await generateTravelArticle(place);
-            
-            // Proactive delay: 4 seconds is the "sweet spot" for Gemini Free Tier
-            await new Promise(r => setTimeout(r, 4000)); 
-            
-        } catch (err) {
-            const errorMsg = err.message || "";
-            
-            // Handle Quota/Rate Limit (Error 429)
-            if (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit")) {
-                triggerToast("Quota reached. Resuming in 65s...");
-                
-                // Wait for the 60-second reset window + 5s safety buffer
-                await new Promise(r => setTimeout(r, 65000)); 
-                
-                try {
-                    // Retry the same location after the wait
-                    await generateTravelArticle(place);
-                } catch (retryErr) {
-                    console.error(`Retry failed for ${place.place_name}`);
+        let success = false;
+        while (!success) { // Keep trying until this specific place is done
+            try {
+                await generateTravelArticle(place);
+                success = true; // Move to next place
+                await new Promise(r => setTimeout(r, 4000)); // 4s safety gap
+            } catch (err) {
+                if (err.message.includes("quota") || err.message.includes("429")) {
+                    triggerToast("Quota Full. Pausing for 65s...");
+                    await new Promise(r => setTimeout(r, 65000)); // Wait for reset
+                    // success remains false, so the 'while' loop will try this 'place' again
+                } else {
+                    console.error("Skipping due to non-quota error:", err);
+                    success = true; // Skip to avoid infinite loop on bad data
                 }
-            } else {
-                console.error(`Skipping ${place.place_name}:`, errorMsg);
-                triggerToast(`Error at ${place.place_name}`);
             }
         }
     }
-    
-    triggerToast("✨ All pending articles generated!");
+    triggerToast("Bulk generation finished!");
 };
 
 
