@@ -705,24 +705,18 @@ useEffect(() => {
 };
 
 const generateTravelArticle = async (place) => {
-    // 1. Define the AI Model Endpoint
-   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    // UPDATED URL: Using gemini-1.5-pro for better stability on v1beta
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`;
 
-    // 2. Craft the AdSense-Optimized Prompt
-    const prompt = `Write a high-quality travel article about ${place.place_name} in ${place.locality || 'Sri Lanka'}. 
+    const prompt = `Write a travel journal entry for ${place.place_name} in ${place.locality || 'Sri Lanka'}. 
     Category: ${place.category}. 
-    Style: Artistic, adventurous, first-person journal entry.
-    Requirements:
-    - Mention high-quality 4K 60fps footage captured on a DJI Neo 2 drone.
-    - Mention photography via iPhone 12 Pro.
-    - Include a technical section with elevation or historical facts.
-    
-    Return ONLY a valid JSON object with these keys:
+    Mention high-quality 4K 60fps footage captured on a DJI Neo 2 drone and iPhone 12 Pro.
+    Return ONLY a valid JSON object:
     {
-      "title": "SEO Optimized Catchy Title",
-      "story": "A 300-400 word engaging narrative",
-      "specs": "Bullet points of technical/location data",
-      "meta": "A 150-character SEO meta description"
+      "title": "SEO Optimized Title",
+      "story": "300 word narrative",
+      "specs": "Technical location data",
+      "meta": "Short SEO description"
     }`;
 
     try {
@@ -738,15 +732,14 @@ const generateTravelArticle = async (place) => {
             })
         });
 
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || 'API Error');
+        }
+
         const data = await response.json();
-        
-        // Check for API errors
-        if (data.error) throw new Error(data.error.message);
-
-        // Parse the stringified JSON from Gemini's response
         const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
-
-        // 3. Save to Supabase
+        
         await saveArticleToDatabase(place.id, aiJson);
 
     } catch (err) {
