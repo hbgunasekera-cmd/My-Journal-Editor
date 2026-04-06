@@ -706,7 +706,8 @@ useEffect(() => {
 
 const generateTravelArticle = async (place) => {
     // Using v1beta with the -latest suffix is the most reliable path currently
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    // Using the stable Gemini 2.5 Flash model
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
     const requestBody = {
         contents: [{
