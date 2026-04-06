@@ -786,11 +786,11 @@ const saveArticleToDatabase = async (id, articleData) => {
         ));
         
        
-        showToast("Journal entry successfully updated!");
+        triggerToast("Journal entry successfully updated!");
 
     } catch (err) {
         console.error("Supabase Save Error:", err.message);
-        showToast("Database update failed.");
+        triggerToast("Database update failed.");
     }
 };
 
@@ -805,6 +805,36 @@ const manualEditArticle = (place) => {
         };
         saveArticleToDatabase(place.id, updatedData);
     }
+};
+
+const bulkGenerateArticles = async () => {
+    // 1. Filter for places that are completed but don't have an article yet
+    // Or you can remove the !p.ai_article check if you want to overwrite everything
+    const pendingPlaces = places.filter(p => p.status === 'done' && !p.ai_article?.story);
+
+    if (pendingPlaces.length === 0) {
+        triggerToast("No pending completed locations found.");
+        return;
+    }
+
+    if (!confirm(`Found ${pendingPlaces.length} locations. Start bulk generation?`)) return;
+
+    triggerToast(`Starting bulk generation for ${pendingPlaces.length} items...`);
+
+    for (const place of pendingPlaces) {
+        try {
+            // Reusing your existing generation logic
+            await generateTravelArticle(place);
+            
+            // Optional: Add a small delay to respect API quotas (1.5 seconds)
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        } catch (err) {
+            console.error(`Failed at ${place.place_name}:`, err);
+            // We continue to the next one even if one fails
+        }
+    }
+
+    triggerToast("Bulk generation sequence complete.");
 };
 
 
@@ -933,10 +963,10 @@ const handleSaveRoute = async () => {
         await refreshAllData(); 
         setSelectedTrip([]); 
         
-        showToast("Route saved successfully!");
+        triggerToast("Route saved successfully!");
     } catch (err) {
         console.error("Save error:", err);
-        showToast("Failed to save route");
+        triggerToast("Failed to save route");
     }
 };
 
@@ -1013,7 +1043,7 @@ const generateGoogleMapsUrl = (points) => {
 const handleWhatsAppShare = () => {
     const link = generateGoogleMapsUrl(selectedTrip);
     if (!link) {
-        showToast("Add some places to your trip first!");
+        triggerToast("Add some places to your trip first!");
         return;
     }
     const text = encodeURIComponent(`Check out my travel route: ${link}`);
@@ -1023,7 +1053,7 @@ const handleWhatsAppShare = () => {
 // For the "QR" button in the Live Planning Sidebar
 const handleShowQR = () => {
     if (!selectedTrip || selectedTrip.length === 0) {
-        showToast("Add some places to your trip first!");
+        triggerToast("Add some places to your trip first!");
         return;
     }
     showQRCode(selectedTrip, "Current Trip Route");
@@ -1038,7 +1068,7 @@ const shareRoute = (route) => {
             : route.waypoints;
 
         if (!pts || pts.length === 0) {
-            showToast("This route has no waypoints.");
+            triggerToast("This route has no waypoints.");
             return;
         }
 
@@ -1047,7 +1077,7 @@ const shareRoute = (route) => {
 
     } catch (e) {
         console.error("Route parsing failed:", e);
-        showToast("Error processing route data.");
+        triggerToast("Error processing route data.");
     }
 };
 
@@ -1112,7 +1142,7 @@ const showQRCode = (points, name = "My Travel Route") => {
     
     modal.querySelector('#copy-link-btn').onclick = () => {
         navigator.clipboard.writeText(universalUrl);
-        showToast("Link copied to clipboard!");
+        triggerToast("Link copied to clipboard!");
     };
 
     modal.querySelector('#whatsapp-modal-btn').onclick = () => {
@@ -1408,6 +1438,15 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 <Icon name={locationSource === 'device' ? 'navigation' : 'home'} className="w-3.5 h-3.5" />
                 {locationSource === 'device' ? 'Live GPS' : 'Home'}
             </button>
+            
+            <button 
+    onClick={bulkGenerateArticles}
+    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+>
+    <i data-lucide="sparkles" className="w-4 h-4"></i>
+    Auto-Generate All Pending
+</button>
+
         </div>
 
         {/* Places Grid */}
