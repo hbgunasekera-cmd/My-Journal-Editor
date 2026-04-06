@@ -706,7 +706,7 @@ useEffect(() => {
 
 const generateTravelArticle = async (place) => {
     // 1. Define the AI Model Endpoint
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
     // 2. Craft the AdSense-Optimized Prompt
     const prompt = `Write a high-quality travel article about ${place.place_name} in ${place.locality || 'Sri Lanka'}. 
