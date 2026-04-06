@@ -179,7 +179,7 @@
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
         const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
-        const GEMINI_API_KEY = "AIzaSyBac-uXgy6yw6_3UEasYw5WHXxuMmWe5AY";
+        const GEMINI_API_KEY = "AIzaSyDdoWTI05_eNHh44Ao2iQfnVEhblMIeWqU";
         
         const HomePoint = { lat: 7.0911, lng: 79.9161 };
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);        
@@ -775,7 +775,7 @@ const saveArticleToDatabase = async (id, articleData) => {
             .from('travel_bucket_list')
             .update({ 
                 ai_article: articleData,
-                status: 'done' // Automatically mark as completed when article is generated
+                status: 'done' 
             })
             .eq('id', id);
 
