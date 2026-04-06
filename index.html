@@ -814,16 +814,14 @@ const bulkGenerateArticles = async () => {
     if (!confirm(`Generate ${pendingPlaces.length} articles? Note: Free tier may pause for quota.`)) return;
 
     for (const place of pendingPlaces) {
-        try {
-            await generateTravelArticle(place);
-            // Longer delay for Free Tier (3 seconds between requests)
-            await new Promise(r => setTimeout(r, 3000)); 
-        } catch (err) {
-            // Check if the error is a Quota/Rate Limit error (429)
+                await generateTravelArticle(place);
+                await new Promise(r => setTimeout(r, 4000));
+            } catch (err) {
+            
             if (err.message.includes("429") || err.message.includes("quota")) {
                 showToast("Quota hit! Waiting 60 seconds to resume...");
-                await new Promise(r => setTimeout(r, 65000)); // Wait 65 seconds
-                await generateTravelArticle(place); // Retry the failed one
+                await new Promise(r => setTimeout(r, 65000));
+                await generateTravelArticle(place);
             } else {
                 console.error(`Skipped ${place.place_name} due to other error.`);
             }
