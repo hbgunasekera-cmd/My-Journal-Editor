@@ -179,7 +179,14 @@
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
         const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
-        const GEMINI_API_KEY = "AIzaSyAwgs7cpIY9jSavq7e9gdnqNUrlKjxCiP4";
+        let GEMINI_API_KEY = localStorage.getItem('Article_Key');
+
+    if (!GEMINI_API_KEY) {
+        GEMINI_API_KEY = prompt("Enter Gemini API Key (Stored locally in your browser, not GitHub):");
+        if (GEMINI_API_KEY) {
+            localStorage.setItem('Article_Key', GEMINI_API_KEY);
+        }
+    }
         
         const HomePoint = { lat: 7.0911, lng: 79.9161 };
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);        
