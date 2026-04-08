@@ -1843,12 +1843,12 @@ const handleSuggestionAction = async (suggestionId, action) => {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
         <MetricColumn title="Countries" data={dashboardStats.countries} />
         <MetricColumn title="Regions" data={dashboardStats.regions} />
-        <MetricColumn title="Cities" data={dashboardStats.cities} />
-        <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />
-        
+        <MetricColumn title="Cities" data={dashboardStats.cities} />              
         <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
-        <MetricColumn title="Visit History" data={dashboardStats.loyalty} highlight /> {/* UPDATED COLUMN */}
         <MetricColumn title="Operating System" data={dashboardStats.os} />
+        <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />  
+        <MetricColumn title="Visit History" data={dashboardStats.loyalty} highlight /> 
+        
         
         {/* Traffic Integrity Column */}
         <div>
