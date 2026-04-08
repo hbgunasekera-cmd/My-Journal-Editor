@@ -1221,7 +1221,7 @@ const dashboardStats = React.useMemo(() => {
         let source = "Direct";
         if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
         else if (lowerUA.includes('instagram')) source = 'Instagram';
-        else if (lowerUA.includes('tiktok') || lowerUA.includes('musically')) source = 'TikTok';
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical_ly')) source = 'TikTok';
         else if (lowerUA.includes('messenger')) source = 'Messenger';
         else if (v.referrer && v.referrer.includes('t.co')) source = 'X (Twitter)';
 
