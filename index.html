@@ -1193,23 +1193,23 @@ const dashboardStats = React.useMemo(() => {
         const lowerUA = ua.toLowerCase();
         const fingerprint = `${v.ip_address}_${ua}`;
         
-        // Determine Loyalty Status
+        // 1. Determine Loyalty Status (Unique vs Returning)
         let loyaltyStatus = "Returning User";
         if (!knownUsers.has(fingerprint)) {
             knownUsers.add(fingerprint);
             loyaltyStatus = "Unique Visit";
         }
 
-        // Bot Detection
+        // 2. Bot Detection
         const botPatterns = ['bot', 'spider', 'crawl', 'lighthouse', 'slurp', 'facebookexternalhit', 'twitterbot'];
         const isBot = botPatterns.some(pattern => lowerUA.includes(pattern));
 
-        // Device Type
+        // 3. Device Type
         let type = 'Desktop';
         if (lowerUA.includes('tablet') || lowerUA.includes('ipad')) type = 'Tablet';
         else if (lowerUA.includes('mobile') || lowerUA.includes('android') || lowerUA.includes('iphone')) type = 'Mobile';
 
-        // OS Detection
+        // 4. OS Detection
         let os = 'Other';
         if (ua.includes('Windows')) os = 'Windows';
         else if (ua.includes('Android')) os = 'Android';
@@ -1217,12 +1217,13 @@ const dashboardStats = React.useMemo(() => {
         else if (ua.includes('Mac OS')) os = 'macOS';
         else if (ua.includes('Linux')) os = 'Linux';
 
-        // Source Attribution
+        // 5. Improved Source Attribution
         let source = "Direct";
-        if (ua.includes('FBAN') || ua.includes('FBAV')) source = 'Facebook';
-        else if (ua.includes('Instagram')) source = 'Instagram';
-        else if (ua.includes('TikTok')) source = 'Tiktok';
-        else if (ua.includes('Messenger')) source = 'Messenger';
+        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
+        else if (lowerUA.includes('instagram')) source = 'Instagram';
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musically')) source = 'TikTok';
+        else if (lowerUA.includes('messenger')) source = 'Messenger';
+        else if (v.referrer && v.referrer.includes('t.co')) source = 'X (Twitter)';
 
         return { type, source, os, isBot, loyaltyStatus };
     };
@@ -1245,7 +1246,7 @@ const dashboardStats = React.useMemo(() => {
         cities: getSortedMetrics(parsedData, 'city'),
         sources: getSortedMetrics(parsedData, 'source'),
         deviceTypes: getSortedMetrics(parsedData, 'type'),
-        loyalty: getSortedMetrics(parsedData, 'loyaltyStatus'), // NEW: Unique vs Returning
+        loyalty: getSortedMetrics(parsedData, 'loyaltyStatus'), 
         os: getSortedMetrics(parsedData, 'os'),
         trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
         likesSummary: (Array.isArray(likesData) ? likesData : []).reduce((acc, l) => {
@@ -1843,10 +1844,10 @@ const handleSuggestionAction = async (suggestionId, action) => {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
         <MetricColumn title="Countries" data={dashboardStats.countries} />
         <MetricColumn title="Regions" data={dashboardStats.regions} />
-        <MetricColumn title="Cities" data={dashboardStats.cities} />              
+        <MetricColumn title="Cities" data={dashboardStats.cities} />
         <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
         <MetricColumn title="Operating System" data={dashboardStats.os} />
-        <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />  
+        <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />    
         <MetricColumn title="Visit History" data={dashboardStats.loyalty} highlight /> 
         
         
