@@ -1218,12 +1218,26 @@ const dashboardStats = React.useMemo(() => {
         else if (ua.includes('Linux')) os = 'Linux';
 
         // 5. Improved Source Attribution
+        
         let source = "Direct";
-        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
-        else if (lowerUA.includes('instagram')) source = 'Instagram';
-        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical_ly')) source = 'TikTok';
-        else if (lowerUA.includes('messenger')) source = 'Messenger';
-        else if (v.referrer && v.referrer.includes('t.co')) source = 'X (Twitter)';
+
+      // 1. Check User Agent (For In-App Browser)
+         if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
+         else if (lowerUA.includes('instagram')) source = 'Instagram';
+         else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
+         else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source =    'YouTube';
+         else if (lowerUA.includes('messenger')) source = 'Messenger';
+
+     // 2. Check Referrer (For Web/Desktop clicks)
+
+        if (source === "Direct" && v.referrer) {
+         const ref = v.referrer.toLowerCase();
+        if (ref.includes('youtube.com') || ref.includes('youtu.be')) {
+        source = 'YouTube';
+      } else if (ref.includes('t.co')) {
+        source = 'X (Twitter)';
+      }
+    }
 
         return { type, source, os, isBot, loyaltyStatus };
     };
