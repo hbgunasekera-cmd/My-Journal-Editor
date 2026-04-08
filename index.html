@@ -1182,37 +1182,34 @@ const toggleStatus = (id, currentStatus) => {
 const dashboardStats = React.useMemo(() => {
     const safeAnalytics = Array.isArray(analyticsData) ? analyticsData : [];
     
-    const parseUA = (uaString = "") => {
-        const ua = uaString;
+    // Track unique fingerprints (IP + User Agent)
+    const knownUsers = new Set();
+    
+    // Sort chronologically to ensure the first occurrence is truly the "Unique" visit
+    const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const parseUA = (v) => {
+        const ua = v.user_agent || "";
         const lowerUA = ua.toLowerCase();
+        const fingerprint = `${v.ip_address}_${ua}`;
         
-        // 1. Bot Detection
+        // Determine Loyalty Status
+        let loyaltyStatus = "Returning User";
+        if (!knownUsers.has(fingerprint)) {
+            knownUsers.add(fingerprint);
+            loyaltyStatus = "Unique Visit";
+        }
+
+        // Bot Detection
         const botPatterns = ['bot', 'spider', 'crawl', 'lighthouse', 'slurp', 'facebookexternalhit', 'twitterbot'];
         const isBot = botPatterns.some(pattern => lowerUA.includes(pattern));
 
-        // 2. Device Type
+        // Device Type
         let type = 'Desktop';
         if (lowerUA.includes('tablet') || lowerUA.includes('ipad')) type = 'Tablet';
         else if (lowerUA.includes('mobile') || lowerUA.includes('android') || lowerUA.includes('iphone')) type = 'Mobile';
 
-        // 3. Brand & Model (Revised for Mobile vs. Desktop)
-        let model = 'Desktop'; 
-        if (type === 'Mobile' || type === 'Tablet') {
-            if (ua.includes('iPhone') || ua.includes('iPad')) {
-                model = ua.includes('iPhone') ? 'iPhone' : 'iPad';
-            } else {
-                const match = ua.match(/\(([^)]+)\)/);
-                if (match && match[1]) {
-                    const segments = match[1].split(';');
-                    const potentialModel = segments[segments.length - 1].trim();
-                    model = potentialModel.includes('Build') ? potentialModel.split('Build')[0].trim() : potentialModel;
-                } else {
-                    model = 'Mobile Device';
-                }
-            }
-        }
-
-        // 4. OS detection
+        // OS Detection
         let os = 'Other';
         if (ua.includes('Windows')) os = 'Windows';
         else if (ua.includes('Android')) os = 'Android';
@@ -1220,15 +1217,17 @@ const dashboardStats = React.useMemo(() => {
         else if (ua.includes('Mac OS')) os = 'macOS';
         else if (ua.includes('Linux')) os = 'Linux';
 
-        // 5. App Source
+        // Source Attribution
         let source = "Direct";
         if (ua.includes('FBAN') || ua.includes('FBAV')) source = 'Facebook';
         else if (ua.includes('Instagram')) source = 'Instagram';
         else if (ua.includes('TikTok')) source = 'Tiktok';
         else if (ua.includes('Messenger')) source = 'Messenger';
 
-        return { type, source, os, model, isBot };
+        return { type, source, os, isBot, loyaltyStatus };
     };
+
+    const parsedData = sortedData.map(v => ({ ...v, ...parseUA(v) }));
 
     const getSortedMetrics = (data, keyOrFn) => {
         const counts = data.reduce((acc, item) => {
@@ -1239,8 +1238,6 @@ const dashboardStats = React.useMemo(() => {
         return Object.entries(counts).sort((a, b) => b[1] - a[1]);
     };
 
-    const parsedData = safeAnalytics.map(v => ({ ...v, ...parseUA(v.user_agent) }));
-
     return {
         totalVisits: safeAnalytics.length,
         countries: getSortedMetrics(parsedData, 'country'),
@@ -1248,7 +1245,7 @@ const dashboardStats = React.useMemo(() => {
         cities: getSortedMetrics(parsedData, 'city'),
         sources: getSortedMetrics(parsedData, 'source'),
         deviceTypes: getSortedMetrics(parsedData, 'type'),
-        models: getSortedMetrics(parsedData, 'model'),
+        loyalty: getSortedMetrics(parsedData, 'loyaltyStatus'), // NEW: Unique vs Returning
         os: getSortedMetrics(parsedData, 'os'),
         trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
         likesSummary: (Array.isArray(likesData) ? likesData : []).reduce((acc, l) => {
@@ -1824,51 +1821,51 @@ const handleSuggestionAction = async (suggestionId, action) => {
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
             
             {/* 1. PAGE VISITS BLOCK (9 METRICS CONSOLIDATED) */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
-                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
-                
-                <div className="flex justify-between items-end mb-10 relative z-10">
-                    <div>
-                        <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
-                        <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
-                    </div>
-                    <div className="text-right flex flex-col items-end">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
-                        <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                            <span className="text-emerald-400 font-black italic text-sm">
-                                {dashboardStats.totalVisits > 0 ? Math.round(((dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0) / dashboardStats.totalVisits) * 100) : 0}%
-                            </span>
-                            <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
-                    <MetricColumn title="Countries" data={dashboardStats.countries} />
-                    <MetricColumn title="Regions" data={dashboardStats.regions} />
-                    <MetricColumn title="Cities" data={dashboardStats.cities} />
-                    <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />
-                    
-                    <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
-                    <MetricColumn title="Brand & Model" data={dashboardStats.models} />
-                    <MetricColumn title="Operating System" data={dashboardStats.os} />
-                    
-                    {/* Traffic Integrity Column */}
-                    <div>
-                        <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
-                        <div className="space-y-2">
-                            {dashboardStats.trafficType.map(([type, count]) => (
-                                <div key={type} className="flex justify-between items-center text-[10px] font-bold">
-                                    <span className={type === 'Real Person' ? 'text-emerald-400' : 'text-rose-400 opacity-60'}>
-                                        {type}
-                                    </span>
-                                    <span className="text-white font-black">{count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+<div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
+    <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
+    
+    <div className="flex justify-between items-end mb-10 relative z-10">
+        <div>
+            <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
+            <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
+        </div>
+        <div className="text-right flex flex-col items-end">
+            <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
+            <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                <span className="text-emerald-400 font-black italic text-sm">
+                    {dashboardStats.totalVisits > 0 ? Math.round(((dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0) / dashboardStats.totalVisits) * 100) : 0}%
+                </span>
+                <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
             </div>
+        </div>
+    </div>
+    
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
+        <MetricColumn title="Countries" data={dashboardStats.countries} />
+        <MetricColumn title="Regions" data={dashboardStats.regions} />
+        <MetricColumn title="Cities" data={dashboardStats.cities} />
+        <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />
+        
+        <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
+        <MetricColumn title="Visit History" data={dashboardStats.loyalty} highlight /> {/* UPDATED COLUMN */}
+        <MetricColumn title="Operating System" data={dashboardStats.os} />
+        
+        {/* Traffic Integrity Column */}
+        <div>
+            <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
+            <div className="space-y-2">
+                {dashboardStats.trafficType.map(([type, count]) => (
+                    <div key={type} className="flex justify-between items-center text-[10px] font-bold">
+                        <span className={type === 'Real Person' ? 'text-emerald-400' : 'text-rose-400 opacity-60'}>
+                            {type}
+                        </span>
+                        <span className="text-white font-black">{count}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+</div>
 
             {/* 2. LIKES METRICS */}
             <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col justify-between">
