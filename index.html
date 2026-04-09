@@ -1275,7 +1275,6 @@ const dashboardStats = React.useMemo(() => {
 
 // --- DASHBOARD ACTIONS (Comments & Suggestions) ---
 
-// Handles replying to comments via the input field in the dashboard
 const submitCommentReply = async (commentId, inputId) => {
     const inputElement = document.getElementById(inputId);
     const replyText = inputElement?.value.trim();
@@ -1299,6 +1298,27 @@ const submitCommentReply = async (commentId, inputId) => {
         console.error(error);
     }
 };
+
+const deleteLocationComment = async (id) => {
+    if (confirm("Are you sure you want to delete this comment?")) {
+        try {
+            const { error } = await supabaseClient
+                .from('location_comments')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            triggerToast('Comment Deleted');
+            refreshAllData(); 
+        } catch (err) {
+            console.error("Delete Error:", err);
+            triggerToast('Failed to delete comment');
+        }
+    }
+};
+
+
 
 // Handles Approve/Reject for Suggestion Approvals
 const handleSuggestionAction = async (suggestionId, action) => {
@@ -1835,7 +1855,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
             
-            {/* 1. PAGE VISITS BLOCK (9 METRICS CONSOLIDATED) */}
+{/* 1. PAGE VISITS BLOCK (9 METRICS CONSOLIDATED) */}
 <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
     <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
     
@@ -1864,8 +1884,6 @@ const handleSuggestionAction = async (suggestionId, action) => {
         <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />    
         <MetricColumn title="Visit History" data={dashboardStats.loyalty} highlight /> 
         
-        
-        {/* Traffic Integrity Column */}
         <div>
             <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
             <div className="space-y-2">
@@ -1882,88 +1900,115 @@ const handleSuggestionAction = async (suggestionId, action) => {
     </div>
 </div>
 
-            {/* 2. LIKES METRICS */}
-            <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col justify-between">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
-                        <p className="text-4xl font-black italic">{dashboardStats.likesSummary.reduce((a, b) => a + b.hits, 0)} <span className="text-sm opacity-60">Likes</span></p>
-                    </div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                        <Icon name="heart" className="w-5 h-5 fill-white text-white" />
-                    </div>
-                </div>
-                <div className="bg-black/10 p-4 rounded-2xl">
-                    <div className="max-h-32 overflow-y-auto no-scrollbar space-y-2">
-                        {dashboardStats.likesSummary.map((item, i) => (
-                            <div key={i} className="flex justify-between items-center border-b border-white/10 pb-1">
-                                <p className="text-[10px] font-bold truncate pr-4">{item.name}</p>
-                                <p className="text-[10px] font-black">{item.hits}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* 3. PENDING COMMENTS */}
-            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
-                        <Icon name="message-square" className="w-4 h-4" /> Pending Comments
-                    </h2>
-                    <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
-                        {allComments.filter(c => !c.reply_text).length}
-                    </span>
-                </div>
-                <div className="space-y-4 overflow-y-auto no-scrollbar flex-1 pr-2">
-                    {allComments.filter(c => !c.reply_text).map(c => (
-                        <div key={c.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <div className="flex justify-between items-start mb-2">
-                                <p className="text-[9px] font-black uppercase text-indigo-500 truncate">{c.travel_bucket_list?.place_name || 'General'}</p>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase">{new Date(c.created_at).toLocaleDateString()}</p>
-                            </div>
-                            <p className="text-xs text-slate-700 font-medium italic mb-3">"{c.comment_text}"</p>
-                            <div className="flex gap-2">
-                                <input id={`reply-input-${c.id}`} className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" placeholder="Type reply..." />
-                                <button onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700">Reply</button>
-                            </div>
-                        </div>
-                    ))}
-                    {allComments.filter(c => !c.reply_text).length === 0 && (
-                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No New Comments</p>
-                    )}
-                </div>
-            </div>
-
-            {/* 4. SUGGESTIONS */}
-            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col max-h-[450px]">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
-                        <Icon name="shield-alert" className="w-4 h-4" /> Suggestions
-                    </h2>
-                    <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
-                        {pendingApprovals.length}
-                    </span>
-                </div>
-                <div className="space-y-3 overflow-y-auto no-scrollbar flex-1 pr-2">
-                    {pendingApprovals.map(a => (
-                        <div key={a.id} className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex justify-between items-center group">
-                            <div>
-                                <p className="text-[10px] font-black uppercase text-slate-800">{a.place_name}</p>
-                                <p className="text-[8px] font-bold text-slate-500 mt-0.5">{a.category || 'Location'}</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => handleSuggestionAction(a.id, 'approved')} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform">Approve</button>
-                                <button onClick={() => handleSuggestionAction(a.id, 'rejected')} className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200">Dismiss</button>
-                            </div>
-                        </div>
-                    ))}
-                    {pendingApprovals.length === 0 && (
-                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No Pending Audits</p>
-                    )}
-                </div>
-            </div>
+{/* 2. LIKES METRICS */}
+<div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col h-[450px]">
+    <div className="flex justify-between items-start mb-4">
+        <div>
+            <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
+            <p className="text-4xl font-black italic">
+                {dashboardStats.likesSummary.reduce((a, b) => a + b.hits, 0)} 
+                <span className="text-sm opacity-60 ml-1">Likes</span>
+            </p>
         </div>
+        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+            <Icon name="heart" className="w-5 h-5 fill-white text-white" />
+        </div>
+    </div>
+
+    <div className="bg-black/10 p-4 rounded-2xl flex-1 flex flex-col min-h-0">
+        <div className="overflow-y-auto no-scrollbar space-y-2 flex-1">
+            {dashboardStats.likesSummary.map((item, i) => (
+                <div key={i} className="flex justify-between items-center border-b border-white/10 pb-1">
+                    <p className="text-[10px] font-bold truncate pr-4">{item.name}</p>
+                    <p className="text-[10px] font-black">{item.hits}</p>
+                </div>
+            ))}
+        </div>
+    </div>
+</div>
+
+{/* 3. PENDING COMMENTS */}
+<div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col h-[450px]">
+    <div className="flex justify-between items-center mb-6">
+        <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
+            <Icon name="message-square" className="w-4 h-4" /> Pending Comments
+        </h2>
+        <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
+            {allComments.filter(c => !c.reply_text).length}
+        </span>
+    </div>
+    <div className="space-y-4 overflow-y-auto no-scrollbar flex-1 pr-2 min-h-0">
+        {allComments.filter(c => !c.reply_text).map(c => (
+            <div key={c.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex justify-between items-start mb-2">
+                    <p className="text-[9px] font-black uppercase text-indigo-500 truncate">
+                        {c.travel_bucket_list?.place_name || 'General'}
+                    </p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">
+                        {new Date(c.created_at).toLocaleDateString()}
+                    </p>
+                </div>
+                <p className="text-xs text-slate-700 font-medium italic mb-3">"{c.comment_text}"</p>
+                <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                        <input 
+                            id={`reply-input-${c.id}`} 
+                            className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" 
+                            placeholder="Type reply..." 
+                        />
+                        <button 
+                            onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} 
+                            className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700"
+                        >
+                            Reply
+                        </button>
+                    </div>
+                    <div className="flex justify-end">
+                        <button 
+                            onClick={() => deleteLocationComment(c.id)} 
+                            className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200 transition-colors"
+                        >
+                            Delete Comment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        ))}
+        {allComments.filter(c => !c.reply_text).length === 0 && (
+            <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No New Comments</p>
+        )}
+    </div>
+</div>
+
+{/* 4. SUGGESTIONS */}
+<div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col h-[450px]">
+    <div className="flex justify-between items-center mb-6">
+        <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
+            <Icon name="shield-alert" className="w-4 h-4" /> Suggestions
+        </h2>
+        <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
+            {pendingApprovals.length}
+        </span>
+    </div>
+    <div className="space-y-3 overflow-y-auto no-scrollbar flex-1 pr-2 min-h-0">
+        {pendingApprovals.map(a => (
+            <div key={a.id} className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex justify-between items-center group">
+                <div>
+                    <p className="text-[10px] font-black uppercase text-slate-800">{a.place_name}</p>
+                    <p className="text-[8px] font-bold text-slate-500 mt-0.5">{a.category || 'Location'}</p>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => handleSuggestionAction(a.id, 'approved')} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform">Approve</button>
+                    <button onClick={() => handleSuggestionAction(a.id, 'rejected')} className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200">Dismiss</button>
+                </div>
+            </div>
+        ))}
+        {pendingApprovals.length === 0 && (
+            <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No Pending Audits</p>
+        )}
+    </div>
+</div>
+     </div>
     </div>
 )}
                     </main>
