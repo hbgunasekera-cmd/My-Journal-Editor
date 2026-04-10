@@ -1604,25 +1604,52 @@ const handleSuggestionAction = async (suggestionId, action) => {
                                         <Icon name="layout-grid" className="w-3.5 h-3.5" />
                                     </button>
 
-                                    <button onClick={() => promptForValue(p.id, 'photo_album_url', p.photo_album_url, 'Legacy Google Photos Album URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.photo_album_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Legacy Album Link">
-                                        <Icon name="link" className="w-3.5 h-3.5" />
+                                    <button onClick={() => {
+    // 1. Prepare the current state: Convert array to a comma-separated string for the prompt
+    const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
+
+    // 2. Open the prompt
+    const newVal = prompt("Enter TikTok Video URLs (comma separated) or Paste HTML Embed block:", current);
+
+    if (newVal !== null) {
+        // 3. Regex to detect TikTok URLs (handles standard, mobile, and embed-style links)
+        const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
+        
+        const extractedLinks = newVal.match(tiktokRegex);
+
+        // 4. Process the input: 
+        // If links were found via regex (from an embed block), use them.
+        // Otherwise, fallback to splitting by comma.
+        const videoArray = extractedLinks 
+            ? [...new Set(extractedLinks)] 
+            : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+
+        // 5. Update the JSONB column
+        updatePlaceField(p.id, 'tiktok_urls', videoArray);
+    }
+}} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls ? 'text-orange-600' : 'text-slate-400'}`} title="Edit Video Link">
+                                        <Icon name="video" className="w-3.5 h-3.5" />
                                     </button>
 
                                     {/* AI ARTICLE BUTTON */}
                                     <button 
-                                        onClick={() => {
-                                            if (!hasArticle) {
-                                                generateTravelArticle(p);
-                                            } else {
-                                                manualEditArticle(p);
-                                            }
-                                        }} 
-                                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${hasArticle ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-400 hover:text-indigo-600'}`} 
-                                        title={hasArticle ? "Edit Article" : "Generate with AI"}
-                                    >
-                                        <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
-                                    </button>
-
+    onClick={() => {
+        if (!hasArticle) {
+            generateTravelArticle(p);
+        } else {
+            manualEditArticle(p);
+        }
+    }} 
+    className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${
+        hasArticle ? 'text-emerald-600' : 'text-slate-400'
+    }`} 
+    title={hasArticle ? "Edit Article" : "Generate with AI"}
+>
+    <Icon 
+        name={hasArticle ? "file-text" : "sparkles"} 
+        className="w-3.5 h-3.5" 
+    />
+</button>
                                     {/* NEW: CLEAR AI ARTICLE BUTTON */}
                                     {hasArticle && (
                                         <button 
