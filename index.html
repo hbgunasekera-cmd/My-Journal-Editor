@@ -1353,7 +1353,8 @@ const handleSuggestionAction = async (suggestionId, action) => {
                     google_maps_url: suggestion.map_url,
                     latitude: suggestion.latitude,
                     longitude: suggestion.longitude,
-                    category: suggestion.category, 
+                    category: suggestion.category,
+                    locality: suggestion.district, 
                     status: 'pending', 
                     created_at: new Date().toISOString()
                 }]);
