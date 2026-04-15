@@ -1261,6 +1261,7 @@ const dashboardStats = React.useMemo(() => {
         sources: getSortedMetrics(parsedData, 'source'),
         deviceTypes: getSortedMetrics(parsedData, 'type'),
         loyalty: getSortedMetrics(parsedData, 'loyaltyStatus'), 
+        pageHistory: getSortedMetrics(parsedData, 'page_path'),
         os: getSortedMetrics(parsedData, 'os'),
         trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
         likesSummary: (Array.isArray(likesData) ? likesData : []).reduce((acc, l) => {
@@ -1909,7 +1910,8 @@ const handleSuggestionAction = async (suggestionId, action) => {
         <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
         <MetricColumn title="Operating System" data={dashboardStats.os} />
         <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />    
-        <MetricColumn title="Visit History" data={dashboardStats.loyalty} highlight /> 
+        <MetricColumn title="Visit Loyalty" data={dashboardStats.loyalty} highlight /> 
+        <MetricColumn title="Visit History" data={dashboardStats.pageHistory} highlight /> 
         
         <div>
             <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
