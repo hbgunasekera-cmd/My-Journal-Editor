@@ -1181,6 +1181,7 @@ const toggleStatus = (id, currentStatus) => {
 
 const dashboardStats = React.useMemo(() => {
     const safeAnalytics = Array.isArray(analyticsData) ? analyticsData : [];
+    const safeLikes = Array.isArray(likesData) ? likesData : [];
     
     // Track unique fingerprints (IP + User Agent)
     const knownUsers = new Set();
@@ -1217,27 +1218,19 @@ const dashboardStats = React.useMemo(() => {
         else if (ua.includes('Mac OS')) os = 'macOS';
         else if (ua.includes('Linux')) os = 'Linux';
 
-        // 5. Improved Source Attribution
-        
+        // 5. Source Attribution
         let source = "Direct";
-
-      // 1. Check User Agent (For In-App Browser)
-         if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
-         else if (lowerUA.includes('instagram')) source = 'Instagram';
-         else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
-         else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source =    'YouTube';
-         else if (lowerUA.includes('messenger')) source = 'Messenger';
-
-     // 2. Check Referrer (For Web/Desktop clicks)
+        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
+        else if (lowerUA.includes('instagram')) source = 'Instagram';
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
+        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source = 'YouTube';
+        else if (lowerUA.includes('messenger')) source = 'Messenger';
 
         if (source === "Direct" && v.referrer) {
-         const ref = v.referrer.toLowerCase();
-        if (ref.includes('youtube.com') || ref.includes('youtu.be')) {
-        source = 'YouTube';
-      } else if (ref.includes('t.co')) {
-        source = 'X (Twitter)';
-      }
-    }
+            const ref = v.referrer.toLowerCase();
+            if (ref.includes('youtube.com') || ref.includes('youtu.be')) source = 'YouTube';
+            else if (ref.includes('t.co')) source = 'X (Twitter)';
+        }
 
         return { type, source, os, isBot, loyaltyStatus };
     };
@@ -1254,7 +1247,14 @@ const dashboardStats = React.useMemo(() => {
     };
 
     return {
-        totalVisits: safeAnalytics.length,
+        // AUDIT FIX: Total visits now only counts "Main Page"
+        totalVisits: parsedData.filter(v => v.page_path === 'Main Page').length,
+        
+        // AUDIT FIX: Separate counters for specific functions
+        addVisits: parsedData.filter(v => v.page_path === 'Add Function').length,
+        planVisits: parsedData.filter(v => v.page_path === 'Plan Function').length,
+
+        // Traffic Intelligence Metrics
         countries: getSortedMetrics(parsedData, 'country'),
         regions: getSortedMetrics(parsedData, 'region'),
         cities: getSortedMetrics(parsedData, 'city'),
@@ -1264,7 +1264,8 @@ const dashboardStats = React.useMemo(() => {
         pageHistory: getSortedMetrics(parsedData, 'page_path'),
         os: getSortedMetrics(parsedData, 'os'),
         trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
-        likesSummary: (Array.isArray(likesData) ? likesData : []).reduce((acc, l) => {
+        
+        likesSummary: safeLikes.reduce((acc, l) => {
             const locName = l.travel_bucket_list?.place_name || 'Unknown';
             const existing = acc.find(x => x.name === locName);
             if (existing) existing.hits += 1; else acc.push({ name: locName, hits: 1 });
