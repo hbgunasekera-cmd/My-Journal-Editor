@@ -12,6 +12,7 @@
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@0.473.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -179,36 +180,13 @@
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
         const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
-        
-         let GEMINI_API_KEY = null;
-
-// 1. TRY: Vercel/System Environment Variable
-try {
-    // Checks if 'process' exists and has the specific variable
-    if (typeof process !== 'undefined' && process.env?.Article_Key) {
-        GEMINI_API_KEY = process.env.Article_Key;
-    }
-} catch (e) {
-    // Silently continue if process.env is not available
-}
-
-// 2. FALLBACK: LocalStorage
-if (!GEMINI_API_KEY) {
-    GEMINI_API_KEY = localStorage.getItem('Article_Key');
-}
-
-// 3. FINAL FALLBACK: User Prompt
-if (!GEMINI_API_KEY) {
-    const userInput = prompt("Enter Gemini API Key (Stored locally in your browser, not GitHub):");
-    if (userInput) {
-        GEMINI_API_KEY = userInput;
-        localStorage.setItem('Article_Key', userInput);
-    }
-}
+       
+       
         
         const HomePoint = { lat: 7.0911, lng: 79.9161 };
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);        
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
+        
         
         // Place this outside of your components
 let iconTimeout;
@@ -278,6 +256,11 @@ const [userCoords, setUserCoords] = React.useState(null);
 const [sortCenter, setSortCenter] = useState(HomePoint);
 const [locationSource, setLocationSource] = useState('device');
 
+const [isLoggedIn, setIsLoggedIn] = useState(false);
+const [loginLoading, setLoginLoading] = useState(false);
+const [loginError, setLoginError] = useState("");
+
+
 // --- UI & Interaction States ---
 const [activeTab, setActiveTab] = useState('places');
 const [selectedTrip, setSelectedTrip] = useState([]);
@@ -303,11 +286,45 @@ const [qrUrl, setQrUrl] = React.useState('');
 const [albumLinks, setAlbumLinks] = useState([]);
 
 
+useEffect(() => {
+   
+    if (isLoggedIn) {
+        let key = null;
 
+        // 1. TRY: Vercel/System Environment Variable
+        try {
+            if (typeof process !== 'undefined' && process.env?.Article_Key) {
+                key = process.env.Article_Key;
+            }
+        } catch (e) {
+            // Environment variables are typically for build-time or Node environments
+        }
+
+        // 2. FALLBACK: LocalStorage (if not found in env)
+        if (!key) {
+            key = localStorage.getItem('Article_Key');
+        }
+
+        // 3. FINAL FALLBACK: User Prompt (if still not found)
+        if (!key) {
+            const userInput = prompt("Enter Gemini API Key (Stored locally in your browser, not GitHub):");
+            if (userInput && userInput.trim() !== "") {
+                key = userInput.trim();
+                localStorage.setItem('Article_Key', key);
+            }
+        }
+
+        // Set to global window object and local variable if key exists
+        if (key) {
+            window.GEMINI_API_KEY = key;
+            console.log("Gemini API Key initialized.");
+        } else {
+            console.warn("No API key provided. AI features will be limited.");
+        }
+    }
+}, [isLoggedIn]);
 
 // --- 1. ICON SYSTEM ---
-
-// --- 1. REFACTORED ICON SYSTEM ---
 
 
 const WeatherIcon = ({ condition }) => {
@@ -1382,9 +1399,102 @@ const handleSuggestionAction = async (suggestionId, action) => {
     }
 };
 
+// Authentication Logic
+    const handleLogin = async () => {
+    const userInp = document.getElementById('loginUser').value.trim();
+    const passInp = document.getElementById('loginPass').value.trim();
+    
+    // Reference the security library
+    const bcryptLib = window.bcrypt || (window.dcodeIO && window.dcodeIO.bcrypt);
 
-            // RENDER
-            return (
+    if (!userInp || !passInp) {
+        setLoginError("Credentials required");
+        return;
+    }
+
+    if (!bcryptLib) {
+        setLoginError("Security library error");
+        return;
+    }
+
+    setLoginLoading(true);
+    setLoginError("");
+
+    try {
+        // Query the 'credentials' table using 'user_id'
+        const { data, error } = await supabaseClient
+            .from('credentials')
+            .select('password, role')
+            .eq('user_id', userInp)
+            .single();
+
+        if (error || !data) {
+            setLoginError("Access Denied: Invalid User");
+            return;
+        }
+
+        // Compare the raw input against the $2a$12... hash
+        const isValid = bcryptLib.compareSync(passInp, data.password);
+
+        if (isValid) {
+            // Update React state only (No localStorage)
+            setIsLoggedIn(true);
+            
+            // If you need the role for UI logic, set it in a React state instead
+            // setRole(data.role); 
+        } else {
+            setLoginError("Access Denied: Invalid Token");
+        }
+    } catch (err) {
+        console.error("Auth Exception:", err);
+        setLoginError("Secure connection failed");
+    } finally {
+        setLoginLoading(false);
+    }
+};
+
+  if (!isLoggedIn) {
+        return (
+            <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-6 z-[9999]">
+                <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl">
+                    <div className="text-center mb-8">
+                        <div className="text-5xl mb-4">🔐</div>
+                        <h2 className="text-2xl font-black text-slate-800">Journal Vault</h2>
+                        <p className="text-slate-500 text-sm">Enter credentials to unlock</p>
+                    </div>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Username</label>
+                            <input id="loginUser" type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 transition-colors" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Password</label>
+                            <input id="loginPass" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 transition-colors" />
+                        </div>
+                        
+                        {loginError && (
+                            <div className="p-3 bg-rose-50 text-rose-600 text-xs font-bold rounded-lg text-center animate-bounce">
+                                {loginError}
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={handleLogin}
+                            disabled={loginLoading}
+                            className="w-full bg-slate-900 text-white p-4 rounded-xl font-bold hover:bg-slate-800 transition-all flex justify-center items-center gap-2"
+                        >
+                            {loginLoading ? "Authenticating..." : "Unlock Access"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    {/* Render Start */}
+
+       return (
                 <div className="flex flex-col h-screen bg-slate-50">
                     {/* GLOBAL HEADER */}
                     <header className="h-16 bg-white border-b flex items-center justify-between px-6 z-[1001] shrink-0 shadow-sm">
@@ -2051,7 +2161,8 @@ const handleSuggestionAction = async (suggestionId, action) => {
                     )}
                 </div>
             );
-        }
+            
+              }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
