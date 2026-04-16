@@ -1556,8 +1556,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 onChange={(e) => setStagedLocation({...stagedLocation, category: e.target.value})} 
                 className="px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
             >
-                {/* Dynamically loading categories from the VALID_CATEGORIES array */}
-                {VALID_CATEGORIES.map(c => (
+               {VALID_CATEGORIES.map(c => (
                     <option key={c} value={c}>{c}</option>
                 ))}
             </select>
@@ -1566,8 +1565,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 onClick={saveStagedLocation} 
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 transition-all active:scale-95"
             >
-                <Icon name="plus" className="w-3 h-3" />
-                Save
+               Save
             </button>
 
             <button 
