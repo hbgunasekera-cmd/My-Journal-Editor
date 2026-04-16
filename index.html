@@ -629,45 +629,48 @@ React.useEffect(() => {
 
 
  // --- HEADER: ADD LOCATION FUNCTIONS ---
-           useEffect(() => {
-    if (isLoggedIn && autocompleteRef.current) {
-        initGoogle();
-    }
-}, [isLoggedIn]);
+
+
 
 const initGoogle = async () => {
+    
+    if (!autocompleteRef.current) {
+        console.warn("Autocomplete input not found in DOM yet.");
+        return;
+    }
+
     try {
         const { Autocomplete } = await google.maps.importLibrary("places");
         
-        // Connect the widget to the input ref
+        // Pass the raw DOM element (autocompleteRef.current)
         const autocomplete = new Autocomplete(autocompleteRef.current, { 
             componentRestrictions: { country: "lk" },
-            fields: ["name", "geometry", "address_components", "url"]
+            fields: ["name", "geometry", "address_components", "url"] 
         });
 
-        // Triggered when a user clicks a suggestion
         autocomplete.addListener("place_changed", () => {
             const place = autocomplete.getPlace();
-            
-            if (!place.geometry || !place.geometry.location) {
-                console.warn("Place contains no geometry data");
-                return;
-            }
+            if (!place.geometry) return;
 
-            // Stage the location for the secondary UI to appear
             setStagedLocation({
                 place_name: place.name,
                 latitude: place.geometry.location.lat(),
                 longitude: place.geometry.location.lng(),
                 locality: place.address_components?.[0]?.long_name || "Unknown Area",
                 google_maps_url: place.url,
-                category: 'Location' 
+                category: VALID_CATEGORIES[0] 
             });
         });
     } catch (err) {
-        console.error("Google Maps Initialization Error:", err);
+        console.error("Google Maps Init Error:", err);
     }
 };
+
+useEffect(() => {
+    if (isLoggedIn && autocompleteRef.current) {
+        initGoogle();
+    }
+}, [isLoggedIn]);
 
 
 
