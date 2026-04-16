@@ -256,6 +256,7 @@ const [userCoords, setUserCoords] = React.useState(null);
 const [sortCenter, setSortCenter] = useState(HomePoint);
 const [locationSource, setLocationSource] = useState('device');
 
+
 const [isLoggedIn, setIsLoggedIn] = useState(false);
 const [loginLoading, setLoginLoading] = useState(false);
 const [loginError, setLoginError] = useState("");
@@ -272,6 +273,7 @@ const [toast, setToast] = useState({ show: false, msg: '' });
 const isGPSEnabled = locationSource === 'device';
 
 // --- Add Location Flow State ---
+const [suggestions, setSuggestions] = useState([]);
 const [stagedLocation, setStagedLocation] = useState(null);
 const [mapReady, setMapReady] = React.useState(false);
 
@@ -627,43 +629,47 @@ React.useEffect(() => {
 
 
             // --- HEADER: ADD LOCATION FUNCTIONS ---
-            const initGoogle = async () => {
-                const { Autocomplete } = await google.maps.importLibrary("places");
-                if (!autocompleteRef.current) return;
-                const autocomplete = new Autocomplete(autocompleteRef.current, { componentRestrictions: { country: "lk" } });
-                autocomplete.addListener("place_changed", () => {
-                    const place = autocomplete.getPlace();
-                    if (!place.geometry) return;
-                    setStagedLocation({
-                        place_name: place.name,
-                        latitude: place.geometry.location.lat(),
-                        longitude: place.geometry.location.lng(),
-                        locality: place.address_components?.[0]?.long_name || "Unknown Area",
-                        google_maps_url: place.url,
-                        category: 'Location' // Default
-                    });
-                });
-            };
+           useEffect(() => {
+    if (isLoggedIn && autocompleteRef.current) {
+        initGoogle();
+    }
+}, [isLoggedIn]);
 
-          const saveStagedLocation = async () => {
-    if (!stagedLocation) return;
-
-    // Distance calculation removed from here as it's now dynamic in the UI
-    const { error } = await supabaseClient.from('travel_bucket_list').insert([{
-        ...stagedLocation,
-        status: 'pending'
+const initGoogle = async () => {
+    try {
+        const { Autocomplete } = await google.maps.importLibrary("places");
         
-    }]);
-    
-    if (!error) {
-        triggerToast('Location Saved Successfully');
-        setStagedLocation(null);
-        if (autocompleteRef.current) autocompleteRef.current.value = '';
-        refreshAllData();
-    } else {
-        triggerToast('Error Saving Location');
+        // Connect the widget to the input ref
+        const autocomplete = new Autocomplete(autocompleteRef.current, { 
+            componentRestrictions: { country: "lk" },
+            fields: ["name", "geometry", "address_components", "url"]
+        });
+
+        // Triggered when a user clicks a suggestion
+        autocomplete.addListener("place_changed", () => {
+            const place = autocomplete.getPlace();
+            
+            if (!place.geometry || !place.geometry.location) {
+                console.warn("Place contains no geometry data");
+                return;
+            }
+
+            // Stage the location for the secondary UI to appear
+            setStagedLocation({
+                place_name: place.name,
+                latitude: place.geometry.location.lat(),
+                longitude: place.geometry.location.lng(),
+                locality: place.address_components?.[0]?.long_name || "Unknown Area",
+                google_maps_url: place.url,
+                category: 'Location' 
+            });
+        });
+    } catch (err) {
+        console.error("Google Maps Initialization Error:", err);
     }
 };
+
+
 
             // --- TAB 1: PLACES FUNCTIONS ---
 const updatePlaceField = async (id, field, value) => {
@@ -687,6 +693,28 @@ const updatePlaceField = async (id, field, value) => {
     } else {
         triggerToast('Update Failed');
         console.error("Update Error:", error);
+    }
+};
+
+const saveStagedLocation = async () => {
+    if (!stagedLocation) return;
+
+    const { error } = await supabaseClient
+        .from('travel_bucket_list')
+        .insert([{
+            ...stagedLocation,
+            status: 'pending',
+            created_at: new Date()
+        }]);
+    
+    if (!error) {
+        triggerToast('Location Saved Successfully');
+        setStagedLocation(null);
+        if (autocompleteRef.current) autocompleteRef.current.value = '';
+        refreshAllData(); // Function to reload your bucket list view
+    } else {
+        console.error("Supabase Insert Error:", error);
+        triggerToast('Error Saving Location');
     }
 };
 
@@ -1509,17 +1537,18 @@ const handleSuggestionAction = async (suggestionId, action) => {
                         
                         <div className="flex items-center gap-3">
                         
-                            <div className="relative flex items-center gap-2">
-    {/* 1. Location Name Search */}
+                  <div className="flex flex-wrap items-center gap-3 p-4 bg-white border-b sticky top-0 z-[1000]">
+    {/* 1. Google Maps Search Input */}
     <div className="relative flex items-center">
-    <input 
-        ref={autocompleteRef} 
-        placeholder="Search Google Maps..." 
-        className="w-48 sm:w-64 px-4 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500/20" 
-    />
-</div>
+        <input 
+            ref={autocompleteRef} 
+            placeholder="Search Google Maps..." 
+            className="w-48 sm:w-64 px-4 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500/20"
+        />
+        {/* Note: Google automatically renders the dropdown list here */}
+    </div>
     
-    {/* 2. Category Selection & 3. Submit/Save Button (Only shows after a place is searched) */}
+    {/* 2. Category & Save Controls (Conditional) */}
     {stagedLocation && (
         <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
             <select 
@@ -1527,7 +1556,10 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 onChange={(e) => setStagedLocation({...stagedLocation, category: e.target.value})} 
                 className="px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
             >
-                {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {/* Ensure VALID_CATEGORIES is defined in your state/constants */}
+                {['Waterfall', 'Camping', 'Trekking', 'Viewpoint', 'City'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                ))}
             </select>
             
             <button 
@@ -1535,7 +1567,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 transition-all active:scale-95"
             >
                 <Icon name="plus" className="w-3 h-3" />
-                Save Location
+                Save to Bucket List
             </button>
 
             <button 
@@ -1546,7 +1578,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
                 className="p-2 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl transition-colors"
                 title="Cancel"
             >
-                {<Icon name="x" className="w-3.5 h-3.5" />}
+                <Icon name="x" className="w-3.5 h-3.5" />
             </button>
         </div>
     )}
