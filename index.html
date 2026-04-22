@@ -222,18 +222,30 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     );
 });
 
-const MetricColumn = ({ title, data, highlight = false }) => (
+
+const MetricColumn = ({ title, data, highlightValue, highlight }) => (
     <div className="min-w-0">
-        <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">{title}</p>
+        <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">
+            {title}
+        </p>
         <div className="space-y-2 max-h-28 overflow-y-auto no-scrollbar">
-            {(data || []).map(([name, count]) => (
-                <div key={name} className="flex justify-between text-[10px] font-bold group">
-                    <span className={`truncate pr-2 ${highlight && name !== 'Direct' ? 'text-indigo-400' : 'text-slate-400'} group-hover:text-white transition-colors`}>
-                        {name}
-                    </span>
-                    <span className="text-white font-black">{count}</span>
-                </div>
-            ))}
+            {(data || []).map(([name, count]) => {
+                // Check if this specific name matches the latest record's value
+                const isLatest = highlightValue && name === highlightValue;
+                
+                return (
+                    <div key={name} className="flex justify-between text-[10px] font-bold group">
+                        <span className={`truncate pr-2 transition-colors ${
+                            isLatest ? 'text-orange-500' : 'text-slate-400 group-hover:text-white'
+                        }`}>
+                            {name}
+                        </span>
+                        <span className={`font-black ${isLatest ? 'text-orange-500' : 'text-white'}`}>
+                            {count}
+                        </span>
+                    </div>
+                );
+            })}
         </div>
     </div>
 );
@@ -286,6 +298,8 @@ const autocompleteRef = useRef(null);
 const lastDrawnCoords = React.useRef(null);
 const [qrUrl, setQrUrl] = React.useState('');
 const [albumLinks, setAlbumLinks] = useState([]);
+
+
 
 
 useEffect(() => {
@@ -1230,35 +1244,26 @@ const toggleStatus = (id, currentStatus) => {
 const dashboardStats = React.useMemo(() => {
     const safeAnalytics = Array.isArray(analyticsData) ? analyticsData : [];
     const safeLikes = Array.isArray(likesData) ? likesData : [];
-    
-    // Track unique fingerprints (IP + User Agent)
     const knownUsers = new Set();
     
-    // Sort chronologically to ensure the first occurrence is truly the "Unique" visit
-    const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-
     const parseUA = (v) => {
         const ua = v.user_agent || "";
         const lowerUA = ua.toLowerCase();
         const fingerprint = `${v.ip_address}_${ua}`;
         
-        // 1. Determine Loyalty Status (Unique vs Returning)
         let loyaltyStatus = "Returning User";
         if (!knownUsers.has(fingerprint)) {
             knownUsers.add(fingerprint);
             loyaltyStatus = "Unique Visit";
         }
 
-        // 2. Bot Detection
         const botPatterns = ['bot', 'spider', 'crawl', 'lighthouse', 'slurp', 'facebookexternalhit', 'twitterbot'];
         const isBot = botPatterns.some(pattern => lowerUA.includes(pattern));
 
-        // 3. Device Type
         let type = 'Desktop';
         if (lowerUA.includes('tablet') || lowerUA.includes('ipad')) type = 'Tablet';
         else if (lowerUA.includes('mobile') || lowerUA.includes('android') || lowerUA.includes('iphone')) type = 'Mobile';
 
-        // 4. OS Detection
         let os = 'Other';
         if (ua.includes('Windows')) os = 'Windows';
         else if (ua.includes('Android')) os = 'Android';
@@ -1266,7 +1271,6 @@ const dashboardStats = React.useMemo(() => {
         else if (ua.includes('Mac OS')) os = 'macOS';
         else if (ua.includes('Linux')) os = 'Linux';
 
-        // 5. Source Attribution
         let source = "Direct";
         if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
         else if (lowerUA.includes('instagram')) source = 'Instagram';
@@ -1283,6 +1287,15 @@ const dashboardStats = React.useMemo(() => {
         return { type, source, os, isBot, loyaltyStatus };
     };
 
+    // IDENTIFY LATEST VISIT: Sort by date descending
+    const sortedLatest = [...safeAnalytics].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const latestRecord = sortedLatest[0];
+    
+    // We parse the latest record separately to get its specific Source and Loyalty
+    const latestMetrics = latestRecord ? { ...latestRecord, ...parseUA(latestRecord) } : null;
+
+    // Process all data for counters
+    const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const parsedData = sortedData.map(v => ({ ...v, ...parseUA(v) }));
 
     const getSortedMetrics = (data, keyOrFn) => {
@@ -1295,14 +1308,8 @@ const dashboardStats = React.useMemo(() => {
     };
 
     return {
-        // AUDIT FIX: Total visits now only counts "Main Page"
+        latest: latestMetrics, // Contains country, region, city, type, os, source, loyaltyStatus
         totalVisits: parsedData.filter(v => v.page_path === 'Main Page').length,
-        
-        // AUDIT FIX: Separate counters for specific functions
-        addVisits: parsedData.filter(v => v.page_path === 'Add Function').length,
-        planVisits: parsedData.filter(v => v.page_path === 'Plan Function').length,
-
-        // Traffic Intelligence Metrics
         countries: getSortedMetrics(parsedData, 'country'),
         regions: getSortedMetrics(parsedData, 'region'),
         cities: getSortedMetrics(parsedData, 'city'),
@@ -1312,7 +1319,6 @@ const dashboardStats = React.useMemo(() => {
         pageHistory: getSortedMetrics(parsedData, 'page_path'),
         os: getSortedMetrics(parsedData, 'os'),
         trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
-        
         likesSummary: safeLikes.reduce((acc, l) => {
             const locName = l.travel_bucket_list?.place_name || 'Unknown';
             const existing = acc.find(x => x.name === locName);
@@ -2009,8 +2015,7 @@ const handleSuggestionAction = async (suggestionId, action) => {
         </div>
     </aside>
 </div>
-                        {/* TAB 3: DASHBOARD */}
-                        
+                      {/* TAB 3: DASHBOARD */}
 {activeTab === 'dashboard' && (
     <div className="h-full overflow-y-auto p-8 no-scrollbar bg-slate-50">
         
@@ -2027,161 +2032,192 @@ const handleSuggestionAction = async (suggestionId, action) => {
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
             
-{/* 1. PAGE VISITS BLOCK (9 METRICS CONSOLIDATED) */}
-<div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
-    <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
-    
-    <div className="flex justify-between items-end mb-10 relative z-10">
-        <div>
-            <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
-            <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
-        </div>
-        <div className="text-right flex flex-col items-end">
-            <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                <span className="text-emerald-400 font-black italic text-sm">
-                    {dashboardStats.totalVisits > 0 ? Math.round(((dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0) / dashboardStats.totalVisits) * 100) : 0}%
-                </span>
-                <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
-            </div>
-        </div>
-    </div>
-    
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
-        <MetricColumn title="Countries" data={dashboardStats.countries} />
-        <MetricColumn title="Regions" data={dashboardStats.regions} />
-        <MetricColumn title="Cities" data={dashboardStats.cities} />
-        <MetricColumn title="Device Type" data={dashboardStats.deviceTypes} />
-        <MetricColumn title="Operating System" data={dashboardStats.os} />
-        <MetricColumn title="App / Source" data={dashboardStats.sources} highlight />    
-        <MetricColumn title="Visit Loyalty" data={dashboardStats.loyalty} highlight /> 
-        <MetricColumn title="Visit History" data={dashboardStats.pageHistory} highlight /> 
-        
-        <div>
-            <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
-            <div className="space-y-2">
-                {dashboardStats.trafficType.map(([type, count]) => (
-                    <div key={type} className="flex justify-between items-center text-[10px] font-bold">
-                        <span className={type === 'Real Person' ? 'text-emerald-400' : 'text-rose-400 opacity-60'}>
-                            {type}
-                        </span>
-                        <span className="text-white font-black">{count}</span>
+            {/* 1. PAGE VISITS BLOCK (TRAFFIC INTELLIGENCE) */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
+                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
+                
+                <div className="flex justify-between items-end mb-10 relative z-10">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
+                        <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
                     </div>
-                ))}
-            </div>
-        </div>
-    </div>
-</div>
-
-{/* 2. LIKES METRICS */}
-<div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col h-[450px]">
-    <div className="flex justify-between items-start mb-4">
-        <div>
-            <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
-            <p className="text-4xl font-black italic">
-                {dashboardStats.likesSummary.reduce((a, b) => a + b.hits, 0)} 
-                <span className="text-sm opacity-60 ml-1">Likes</span>
-            </p>
-        </div>
-        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <Icon name="heart" className="w-5 h-5 fill-white text-white" />
-        </div>
-    </div>
-
-    <div className="bg-black/10 p-4 rounded-2xl flex-1 flex flex-col min-h-0">
-        <div className="overflow-y-auto no-scrollbar space-y-2 flex-1">
-            {dashboardStats.likesSummary.map((item, i) => (
-                <div key={i} className="flex justify-between items-center border-b border-white/10 pb-1">
-                    <p className="text-[10px] font-bold truncate pr-4">{item.name}</p>
-                    <p className="text-[10px] font-black">{item.hits}</p>
+                    <div className="text-right flex flex-col items-end">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
+                        <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                            <span className="text-emerald-400 font-black italic text-sm">
+                                {dashboardStats.totalVisits > 0 ? Math.round(((dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0) / dashboardStats.totalVisits) * 100) : 0}%
+                            </span>
+                            <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
+    <MetricColumn 
+        title="Countries" 
+        data={dashboardStats.countries} 
+        highlightValue={dashboardStats.latest?.country} 
+    />
+    <MetricColumn 
+        title="Regions" 
+        data={dashboardStats.regions} 
+        highlightValue={dashboardStats.latest?.region} 
+    />
+    <MetricColumn 
+        title="Cities" 
+        data={dashboardStats.cities} 
+        highlightValue={dashboardStats.latest?.city} 
+    />
+    <MetricColumn 
+        title="Device Type" 
+        data={dashboardStats.deviceTypes} 
+        highlightValue={dashboardStats.latest?.type} 
+    />
+    <MetricColumn 
+        title="Operating System" 
+        data={dashboardStats.os} 
+        highlightValue={dashboardStats.latest?.os} 
+    />
+    
+    {/* Added Highlights for Source and Loyalty */}
+    <MetricColumn 
+        title="App / Source" 
+        data={dashboardStats.sources} 
+        highlightValue={dashboardStats.latest?.source} 
+    />    
+    <MetricColumn 
+        title="Visit Loyalty" 
+        data={dashboardStats.loyalty} 
+        highlightValue={dashboardStats.latest?.loyaltyStatus} 
+    /> 
+    
+    <MetricColumn title="Visit History" data={dashboardStats.pageHistory} highlight /> 
+    
+    <div>
+        <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
+        <div className="space-y-2">
+            {dashboardStats.trafficType.map(([type, count]) => (
+                <div key={type} className="flex justify-between items-center text-[10px] font-bold">
+                    <span className={type === 'Real Person' ? 'text-emerald-400' : 'text-rose-400 opacity-60'}>
+                        {type}
+                    </span>
+                    <span className="text-white font-black">{count}</span>
                 </div>
             ))}
         </div>
     </div>
 </div>
+            </div>
 
-{/* 3. PENDING COMMENTS */}
-<div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col h-[450px]">
-    <div className="flex justify-between items-center mb-6">
-        <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
-            <Icon name="message-square" className="w-4 h-4" /> Pending Comments
-        </h2>
-        <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
-            {allComments.filter(c => !c.reply_text).length}
-        </span>
-    </div>
-    <div className="space-y-4 overflow-y-auto no-scrollbar flex-1 pr-2 min-h-0">
-        {allComments.filter(c => !c.reply_text).map(c => (
-            <div key={c.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <div className="flex justify-between items-start mb-2">
-                    <p className="text-[9px] font-black uppercase text-indigo-500 truncate">
-                        {c.travel_bucket_list?.place_name || 'General'}
-                    </p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase">
-                        {new Date(c.created_at).toLocaleDateString()}
-                    </p>
-                </div>
-                <p className="text-xs text-slate-700 font-medium italic mb-3">"{c.comment_text}"</p>
-                <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                        <input 
-                            id={`reply-input-${c.id}`} 
-                            className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" 
-                            placeholder="Type reply..." 
-                        />
-                        <button 
-                            onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} 
-                            className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700"
-                        >
-                            Reply
-                        </button>
+            {/* 2. LIKES METRICS */}
+            <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-[2.5rem] p-8 text-white shadow-xl flex flex-col h-[450px]">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-pink-200 mb-1">Popular Locations</p>
+                        <p className="text-4xl font-black italic">
+                            {dashboardStats.likesSummary.reduce((a, b) => a + b.hits, 0)} 
+                            <span className="text-sm opacity-60 ml-1">Likes</span>
+                        </p>
                     </div>
-                    <div className="flex justify-end">
-                        <button 
-                            onClick={() => deleteLocationComment(c.id)} 
-                            className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200 transition-colors"
-                        >
-                            Delete Comment
-                        </button>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        <Icon name="heart" className="w-5 h-5 fill-white text-white" />
+                    </div>
+                </div>
+
+                <div className="bg-black/10 p-4 rounded-2xl flex-1 flex flex-col min-h-0">
+                    <div className="overflow-y-auto no-scrollbar space-y-2 flex-1">
+                        {dashboardStats.likesSummary.map((item, i) => (
+                            <div key={i} className="flex justify-between items-center border-b border-white/10 pb-1">
+                                <p className="text-[10px] font-bold truncate pr-4">{item.name}</p>
+                                <p className="text-[10px] font-black">{item.hits}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
-        ))}
-        {allComments.filter(c => !c.reply_text).length === 0 && (
-            <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No New Comments</p>
-        )}
-    </div>
-</div>
 
-{/* 4. SUGGESTIONS */}
-<div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col h-[450px]">
-    <div className="flex justify-between items-center mb-6">
-        <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
-            <Icon name="shield-alert" className="w-4 h-4" /> Suggestions
-        </h2>
-        <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
-            {pendingApprovals.length}
-        </span>
-    </div>
-    <div className="space-y-3 overflow-y-auto no-scrollbar flex-1 pr-2 min-h-0">
-        {pendingApprovals.map(a => (
-            <div key={a.id} className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex justify-between items-center group">
-                <div>
-                    <p className="text-[10px] font-black uppercase text-slate-800">{a.place_name}</p>
-                    <p className="text-[8px] font-bold text-slate-500 mt-0.5">{a.category || 'Location'}</p>
+            {/* 3. PENDING COMMENTS */}
+            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col h-[450px]">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-[10px] font-black uppercase text-slate-800 flex items-center gap-2">
+                        <Icon name="message-square" className="w-4 h-4" /> Pending Comments
+                    </h2>
+                    <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[9px] font-bold">
+                        {allComments.filter(c => !c.reply_text).length}
+                    </span>
                 </div>
-                <div className="flex gap-2">
-                    <button onClick={() => handleSuggestionAction(a.id, 'approved')} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform">Approve</button>
-                    <button onClick={() => handleSuggestionAction(a.id, 'rejected')} className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200">Dismiss</button>
+                <div className="space-y-4 overflow-y-auto no-scrollbar flex-1 pr-2 min-h-0">
+                    {allComments.filter(c => !c.reply_text).map(c => (
+                        <div key={c.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="flex justify-between items-start mb-2">
+                                <p className="text-[9px] font-black uppercase text-indigo-500 truncate">
+                                    {c.travel_bucket_list?.place_name || 'General'}
+                                </p>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase">
+                                    {new Date(c.created_at).toLocaleDateString()}
+                                </p>
+                            </div>
+                            <p className="text-xs text-slate-700 font-medium italic mb-3">"{c.comment_text}"</p>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    <input 
+                                        id={`reply-input-${c.id}`} 
+                                        className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" 
+                                        placeholder="Type reply..." 
+                                    />
+                                    <button 
+                                        onClick={() => submitCommentReply(c.id, `reply-input-${c.id}`)} 
+                                        className="px-4 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase transition-all hover:bg-indigo-700"
+                                    >
+                                        Reply
+                                    </button>
+                                </div>
+                                <div className="flex justify-end">
+                                    <button 
+                                        onClick={() => deleteLocationComment(c.id)} 
+                                        className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200 transition-colors"
+                                    >
+                                        Delete Comment
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {allComments.filter(c => !c.reply_text).length === 0 && (
+                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No New Comments</p>
+                    )}
                 </div>
             </div>
-        ))}
-        {pendingApprovals.length === 0 && (
-            <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No Pending Audits</p>
-        )}
-    </div>
-</div>
-     </div>
+
+            {/* 4. SUGGESTIONS */}
+            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col h-[450px]">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-2">
+                        <Icon name="shield-alert" className="w-4 h-4" /> Suggestions
+                    </h2>
+                    <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[9px] font-bold">
+                        {pendingApprovals.length}
+                    </span>
+                </div>
+                <div className="space-y-3 overflow-y-auto no-scrollbar flex-1 pr-2 min-h-0">
+                    {pendingApprovals.map(a => (
+                        <div key={a.id} className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex justify-between items-center group">
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-800">{a.place_name}</p>
+                                <p className="text-[8px] font-bold text-slate-500 mt-0.5">{a.category || 'Location'}</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => handleSuggestionAction(a.id, 'approved')} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase shadow-lg shadow-emerald-100 hover:scale-105 transition-transform">Approve</button>
+                                <button onClick={() => handleSuggestionAction(a.id, 'rejected')} className="px-3 py-1.5 bg-rose-100 text-rose-600 rounded-lg text-[8px] font-black uppercase hover:bg-rose-200">Dismiss</button>
+                            </div>
+                        </div>
+                    ))}
+                    {pendingApprovals.length === 0 && (
+                        <p className="text-center text-slate-400 py-10 text-[10px] font-bold uppercase tracking-widest">No Pending Audits</p>
+                    )}
+                </div>
+            </div>
+        </div>
     </div>
 )}
                     </main>
