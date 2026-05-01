@@ -891,6 +891,76 @@
                 }
             };
 
+            const generatePlaceMetadata = async (place) => {
+                const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
+
+                const metaPrompt = `Act as a Sri Lankan travel expert. For the place "${place.place_name}" in ${place.locality || 'Sri Lanka'} (Category: ${place.category}), determine the governing authority and restriction level.
+    
+    Return ONLY a JSON object with this exact structure:
+    {
+      "restriction_level": "None" | "Low" | "High" | "Restricted",
+      "governing_org": "Open" | "Department of Wildlife Conservation" | "Department of Forest Conservation" | "Central Cultural Fund" | "Department of Archaeology" | "Department of National Botanic Gardens" | "National Livestock Development Board" | "Local Authorities"
+    }
+
+    Rules:
+    1. "None" for public roads/beaches. "Low" for popular parks. "High" for protected zones.
+    2. "Open" if no ticket or office exists.
+    3. Match the governing_org exactly to the list provided.`;
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: metaPrompt }] }],
+                            generationConfig: { response_mime_type: "application/json", temperature: 0.2 }
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+
+                    const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
+
+                    // Update Database
+                    const { error } = await supabaseClient
+                        .from('travel_bucket_list')
+                        .update({
+                            restriction_level: aiJson.restriction_level,
+                            governing_org: aiJson.governing_org
+                        })
+                        .eq('id', place.id);
+
+                    if (error) throw error;
+                    return true;
+                } catch (err) {
+                    console.error("Metadata AI Error:", err);
+                    return false;
+                }
+            };
+
+            const bulkUpdateMetadata = async () => {
+                // Only target places marked 'done' where metadata is still default ('None'/'Open')
+                const targets = places.filter(p => p.status === 'done' && (p.restriction_level === 'None' || p.governing_org === 'Open'));
+
+                if (targets.length === 0) {
+                    triggerToast("No 'Done' places need updating.");
+                    return;
+                }
+
+                triggerToast(`Analyzing ${targets.length} locations...`);
+
+                for (const place of targets) {
+                    const success = await generatePlaceMetadata(place);
+                    if (success) {
+                        await new Promise(r => setTimeout(r, 2000)); // Rate limiting safety
+                    }
+                }
+
+                triggerToast("Metadata audit complete!");
+                refreshAllData();
+            };
+
             const saveArticleToDatabase = async (id, articleData) => {
                 try {
                     const { error } = await supabaseClient
@@ -1683,13 +1753,24 @@
                                         {locationSource === 'device' ? 'Live GPS' : 'Home'}
                                     </button>
 
-                                    <button
-                                        onClick={bulkGenerateArticles}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100 active:scale-95"
-                                    >
-                                        <Icon name="sparkles" className="w-3.5 h-3.5" />
-                                        Articles
-                                    </button>
+                                    {/* AI Control Group */}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={bulkGenerateArticles}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100 active:scale-95"
+                                        >
+                                            <Icon name="sparkles" className="w-3.5 h-3.5" />
+                                            Articles
+                                        </button>
+
+                                        <button
+                                            onClick={bulkUpdateMetadata}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 active:scale-95"
+                                        >
+                                            <Icon name="shield-check" className="w-3.5 h-3.5" />
+                                            Audit Meta
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Places Grid */}
@@ -1769,38 +1850,39 @@
                                                         </select>
 
                                                         {/* Access & Authority Controls */}
-                                                        <div className="flex flex-col gap-2 mt-2">
-                                                            {/* Restriction Level Selection */}
-                                                            <select
-                                                                value={p.restriction_level || 'None'}
-                                                                onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)}
-                                                                className="w-full text-[9px] font-bold uppercase text-rose-600 bg-rose-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-rose-100 transition-colors"
-                                                            >
-                                                                <option value="None">Public</option>
-                                                                <option value="Low">Low</option>
-                                                                <option value="High">Permit Required</option>
-                                                                <option value="Restricted">Restricted Area</option>
-                                                            </select>
+                                                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-50">
+                                                            <div className="flex items-center gap-2">
+                                                                <Icon name="shield" className="w-2.5 h-2.5 text-rose-400" />
+                                                                <select
+                                                                    value={p.restriction_level || 'None'}
+                                                                    onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)}
+                                                                    className="flex-1 text-[8px] font-black uppercase text-rose-600 bg-rose-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-rose-100 transition-colors"
+                                                                >
+                                                                    <option value="None">Public / No Restriction</option>
+                                                                    <option value="Low">Low / General Rules</option>
+                                                                    <option value="High">High / Permit Required</option>
+                                                                    <option value="Restricted">Restricted / No Entry</option>
+                                                                </select>
+                                                            </div>
 
-                                                            {/* Governing Organization Selection */}
-                                                            <select
-                                                                value={p.governing_org || 'Open'}
-                                                                onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)}
-                                                                className="w-full text-[9px] font-bold uppercase text-emerald-600 bg-emerald-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-emerald-100 transition-colors"
-                                                            >
-                                                                <option value="Open">No Authority</option>
-                                                                <option value="Department of Wildlife Conservation">Dept. of Wildlife Conservation (DWC)</option>
-                                                                <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
-                                                                <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
-                                                                <option value="Department of Archaeology">Department of Archaeology</option>
-                                                                <option value="Department of National Botanic Gardens">Dept. of National Botanic Gardens</option>
-                                                                <option value="National Livestock Development Board">National Livestock Development Board</option>
-                                                                <option value="Local Authorities">Local Authorities (Pradeshiya Sabha)</option>
-                                                            </select>
+                                                            <div className="flex items-center gap-2">
+                                                                <Icon name="landmark" className="w-2.5 h-2.5 text-emerald-400" />
+                                                                <select
+                                                                    value={p.governing_org || 'Open'}
+                                                                    onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)}
+                                                                    className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100 transition-colors"
+                                                                >
+                                                                    <option value="Open">No Governing Authority</option>
+                                                                    <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
+                                                                    <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
+                                                                    <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
+                                                                    <option value="Department of Archaeology">Dept. of Archaeology</option>
+                                                                    <option value="Department of National Botanic Gardens">National Botanic Gardens</option>
+                                                                    <option value="National Livestock Development Board">NLDB</option>
+                                                                    <option value="Local Authorities">Local Authorities (PS)</option>
+                                                                </select>
+                                                            </div>
                                                         </div>
-
-
-
                                                     </div>
 
                                                     {/* Footer Actions */}
@@ -1813,7 +1895,7 @@
                                                             <button
                                                                 onClick={() => {
                                                                     const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
-                                                                    const newVal = prompt("Enter Image URLs (comma separated) or Paste HTML Embed block:", current);
+                                                                    const newVal = prompt("Enter Image URLs (comma separated):", current);
                                                                     if (newVal !== null) {
                                                                         const regex = /https:\/\/lh3\.googleusercontent\.com\/pw\/[^"'\s<>]+/g;
                                                                         const extractedLinks = newVal.match(regex);
@@ -1822,64 +1904,35 @@
                                                                     }
                                                                 }}
                                                                 className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
-                                                                title="Manage Internal Gallery"
+                                                                title="Manage Gallery"
                                                             >
                                                                 <Icon name="layout-grid" className="w-3.5 h-3.5" />
                                                             </button>
 
                                                             <button onClick={() => {
-                                                                // 1. Prepare the current state: Convert array to a comma-separated string for the prompt
                                                                 const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
-
-                                                                // 2. Open the prompt
-                                                                const newVal = prompt("Enter TikTok Video URLs (comma separated) or Paste HTML Embed block:", current);
-
+                                                                const newVal = prompt("Enter TikTok URLs:", current);
                                                                 if (newVal !== null) {
-                                                                    // 3. Regex to detect TikTok URLs (handles standard, mobile, and embed-style links)
                                                                     const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
-
                                                                     const extractedLinks = newVal.match(tiktokRegex);
-
-                                                                    // 4. Process the input: 
-                                                                    // If links were found via regex (from an embed block), use them.
-                                                                    // Otherwise, fallback to splitting by comma.
-                                                                    const videoArray = extractedLinks
-                                                                        ? [...new Set(extractedLinks)]
-                                                                        : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
-
-                                                                    // 5. Update the JSONB column
+                                                                    const videoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
                                                                     updatePlaceField(p.id, 'tiktok_urls', videoArray);
                                                                 }
-                                                            }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Video Link">
+                                                            }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls?.length > 0 ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Videos">
                                                                 <Icon name="video" className="w-3.5 h-3.5" />
                                                             </button>
 
-                                                            {/* AI ARTICLE BUTTON */}
                                                             <button
-                                                                onClick={() => {
-                                                                    if (!hasArticle) {
-                                                                        generateTravelArticle(p);
-                                                                    } else {
-                                                                        manualEditArticle(p);
-                                                                    }
-                                                                }}
-                                                                className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'
-                                                                    }`}
+                                                                onClick={() => hasArticle ? manualEditArticle(p) : generateTravelArticle(p)}
+                                                                className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'}`}
                                                                 title={hasArticle ? "Edit Article" : "Generate with AI"}
                                                             >
-                                                                <Icon
-                                                                    name={hasArticle ? "file-text" : "sparkles"}
-                                                                    className="w-3.5 h-3.5"
-                                                                />
+                                                                <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
                                                             </button>
-                                                            {/* NEW: CLEAR AI ARTICLE BUTTON */}
+
                                                             {hasArticle && (
                                                                 <button
-                                                                    onClick={() => {
-                                                                        if (window.confirm(`Are you sure you want to delete the AI article for ${p.place_name}?`)) {
-                                                                            updatePlaceField(p.id, 'ai_article', {});
-                                                                        }
-                                                                    }}
+                                                                    onClick={() => window.confirm(`Delete AI article for ${p.place_name}?`) && updatePlaceField(p.id, 'ai_article', {})}
                                                                     className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition-colors"
                                                                     title="Delete AI Article"
                                                                 >
