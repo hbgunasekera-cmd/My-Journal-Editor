@@ -1775,26 +1775,16 @@
                                             : 'bg-amber-50 border-amber-200 text-amber-600'
                                             }`}
                                     >
-                                        <Icon name={locationSource === 'device' ? 'navigation' : 'home'} className="w-3.5 h-3.5" />
+                                        <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3.5 h-3.5" />
                                         {locationSource === 'device' ? 'Live GPS' : 'Home'}
                                     </button>
 
-                                    {/* AI Control Group */}
                                     <div className="flex gap-2">
-                                        <button
-                                            onClick={bulkGenerateArticles}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100 active:scale-95"
-                                        >
-                                            <Icon name="sparkles" className="w-3.5 h-3.5" />
-                                            Articles
+                                        <button onClick={bulkGenerateArticles} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100 active:scale-95">
+                                            <Icon name="sparkles" className="w-3.5 h-3.5" /> Articles
                                         </button>
-
-                                        <button
-                                            onClick={bulkUpdateMetadata}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 active:scale-95"
-                                        >
-                                            <Icon name="shield-check" className="w-3.5 h-3.5" />
-                                            Audit Meta
+                                        <button onClick={bulkUpdateMetadata} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 active:scale-95">
+                                            <Icon name="shield-check" className="w-3.5 h-3.5" /> Audit Meta
                                         </button>
                                     </div>
                                 </div>
@@ -1803,9 +1793,7 @@
                                 <div className="flex-1 overflow-y-auto p-8 no-scrollbar bg-slate-50/50">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                                         {(processedPlaces || []).map(p => {
-                                            const dynamicDistance = (L.latLng(sortCenter.lat, sortCenter.lng)
-                                                .distanceTo(L.latLng(p.latitude, p.longitude)) / 1000).toFixed(1);
-
+                                            const dynamicDistance = (L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(p.latitude, p.longitude)) / 1000).toFixed(1);
                                             const hasArticle = p.ai_article && Object.keys(p.ai_article).length > 0;
 
                                             return (
@@ -1820,84 +1808,44 @@
                                                                 <Icon name="image" className="w-6 h-6" />
                                                             </div>
                                                         )}
-
-                                                        <button
-                                                            onClick={() => deleteLocation(p.id, p.place_name)}
-                                                            className="absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-sm transition-all opacity-0 group-hover:opacity-100"
-                                                        >
+                                                        <button onClick={() => deleteLocation(p.id, p.place_name)} className="absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-sm transition-all opacity-0 group-hover:opacity-100">
                                                             <Icon name="trash-2" className="w-3.5 h-3.5" />
                                                         </button>
-
-                                                        <button
-                                                            onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')}
-                                                            className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 select-none outline-none ${p.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white/90 text-orange-500'
-                                                                }`}
-                                                        >
+                                                        <button onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 ${p.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white/90 text-orange-500'}`}>
                                                             <div className="flex items-center gap-1">
-                                                                <Icon name={p.status === 'done' ? 'check-circle' : 'circle'} className="w-2.5 h-2.5" />
-                                                                {p.status}
+                                                                <Icon name={p.status === 'done' ? 'check-circle' : 'circle'} className="w-2.5 h-2.5" /> {p.status}
                                                             </div>
                                                         </button>
                                                     </div>
 
                                                     {/* Body Details */}
                                                     <div className="p-4 flex-1 flex flex-col gap-2">
-                                                        <input
-                                                            type="text"
-                                                            defaultValue={p.place_name}
-                                                            onBlur={(e) => updatePlaceField(p.id, 'place_name', e.target.value.trim())}
-                                                            className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full"
-                                                        />
-
+                                                        <input type="text" defaultValue={p.place_name} onBlur={(e) => updatePlaceField(p.id, 'place_name', e.target.value.trim())} className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full" />
                                                         <div className="flex flex-col gap-1 px-1">
                                                             <div className="flex items-center gap-1 -ml-1">
-                                                                <Icon name="map-pin" className="w-3 h-3" />
-                                                                <input
-                                                                    type="text"
-                                                                    defaultValue={p.locality || ''}
-                                                                    placeholder="Unknown Locality"
-                                                                    onBlur={(e) => updatePlaceField(p.id, 'locality', e.target.value)}
-                                                                    className="text-[9px] font-bold text-slate-400 uppercase bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full truncate"
-                                                                />
+                                                                <Icon name="map-pin" className="w-3 h-3 text-slate-400" />
+                                                                <input type="text" defaultValue={p.locality || ''} placeholder="Unknown Locality" onBlur={(e) => updatePlaceField(p.id, 'locality', e.target.value)} className="text-[9px] font-bold text-slate-400 uppercase bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full truncate" />
                                                             </div>
-
                                                             <p className={`text-[9px] font-black uppercase flex items-center gap-1 ${locationSource === 'device' ? 'text-blue-500' : 'text-amber-600'}`}>
-                                                                <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3 h-3" />
-                                                                {dynamicDistance} KM
+                                                                <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3 h-3" /> {dynamicDistance} KM
                                                             </p>
                                                         </div>
-
-                                                        <select
-                                                            value={p.category}
-                                                            onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)}
-                                                            className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
-                                                        >
+                                                        <select value={p.category} onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)} className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-indigo-100 transition-colors">
                                                             {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                                         </select>
-
-                                                        {/* Access & Authority Controls */}
                                                         <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-50">
                                                             <div className="flex items-center gap-2">
                                                                 <Icon name="shield" className="w-2.5 h-2.5 text-rose-400" />
-                                                                <select
-                                                                    value={p.restriction_level || 'None'}
-                                                                    onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)}
-                                                                    className="flex-1 text-[8px] font-black uppercase text-rose-600 bg-rose-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-rose-100 transition-colors"
-                                                                >
+                                                                <select value={p.restriction_level || 'None'} onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-rose-600 bg-rose-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-rose-100">
                                                                     <option value="None">Public / No Restriction</option>
                                                                     <option value="Low">Low / General Rules</option>
                                                                     <option value="High">High / Permit Required</option>
                                                                     <option value="Restricted">Restricted / No Entry</option>
                                                                 </select>
                                                             </div>
-
                                                             <div className="flex items-center gap-2">
                                                                 <Icon name="landmark" className="w-2.5 h-2.5 text-emerald-400" />
-                                                                <select
-                                                                    value={p.governing_org || 'Open'}
-                                                                    onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)}
-                                                                    className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100 transition-colors"
-                                                                >
+                                                                <select value={p.governing_org || 'Open'} onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100">
                                                                     <option value="Open">No Governing Authority</option>
                                                                     <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
                                                                     <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
@@ -1912,65 +1860,68 @@
                                                         </div>
                                                     </div>
 
-                                                    {/* Footer Actions */}
-                                                    <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-                                                        <div className="flex gap-1">
-                                                            <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo">
-                                                                <Icon name="camera" className="w-3.5 h-3.5" />
-                                                            </button>
+                                                    {/* Footer Actions - Centered and Minimal Map Button */}
+                                                    <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-2">
+                                                        <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo">
+                                                            <Icon name="camera" className="w-3.5 h-3.5" />
+                                                        </button>
 
-                                                            <button
-                                                                onClick={() => {
-                                                                    const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
-                                                                    const newVal = prompt("Enter Image URLs (comma separated):", current);
-                                                                    if (newVal !== null) {
-                                                                        const regex = /https:\/\/lh3\.googleusercontent\.com\/pw\/[^"'\s<>]+/g;
-                                                                        const extractedLinks = newVal.match(regex);
-                                                                        const photoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
-                                                                        updatePlaceField(p.id, 'album_photos', photoArray);
-                                                                    }
-                                                                }}
-                                                                className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
-                                                                title="Manage Gallery"
-                                                            >
-                                                                <Icon name="layout-grid" className="w-3.5 h-3.5" />
-                                                            </button>
-
-                                                            <button onClick={() => {
-                                                                const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
-                                                                const newVal = prompt("Enter TikTok URLs:", current);
+                                                        <button
+                                                            onClick={() => {
+                                                                const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
+                                                                const newVal = prompt("Enter Image URLs:", current);
                                                                 if (newVal !== null) {
-                                                                    const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
-                                                                    const extractedLinks = newVal.match(tiktokRegex);
-                                                                    const videoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
-                                                                    updatePlaceField(p.id, 'tiktok_urls', videoArray);
+                                                                    const regex = /https:\/\/lh3\.googleusercontent\.com\/pw\/[^"'\s<>]+/g;
+                                                                    const extractedLinks = newVal.match(regex);
+                                                                    const photoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+                                                                    updatePlaceField(p.id, 'album_photos', photoArray);
                                                                 }
-                                                            }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls?.length > 0 ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Videos">
-                                                                <Icon name="video" className="w-3.5 h-3.5" />
-                                                            </button>
+                                                            }}
+                                                            className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
+                                                            title="Manage Gallery"
+                                                        >
+                                                            <Icon name="layout-grid" className="w-3.5 h-3.5" />
+                                                        </button>
 
+                                                        <button onClick={() => {
+                                                            const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
+                                                            const newVal = prompt("Enter TikTok URLs:", current);
+                                                            if (newVal !== null) {
+                                                                const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
+                                                                const extractedLinks = newVal.match(tiktokRegex);
+                                                                const videoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+                                                                updatePlaceField(p.id, 'tiktok_urls', videoArray);
+                                                            }
+                                                        }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls?.length > 0 ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Videos">
+                                                            <Icon name="video" className="w-3.5 h-3.5" />
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => hasArticle ? manualEditArticle(p) : generateTravelArticle(p)}
+                                                            className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'}`}
+                                                            title={hasArticle ? "Edit Article" : "Generate with AI"}
+                                                        >
+                                                            <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
+                                                        </button>
+
+                                                        {hasArticle && (
                                                             <button
-                                                                onClick={() => hasArticle ? manualEditArticle(p) : generateTravelArticle(p)}
-                                                                className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'}`}
-                                                                title={hasArticle ? "Edit Article" : "Generate with AI"}
+                                                                onClick={() => window.confirm(`Delete AI article for ${p.place_name}?`) && updatePlaceField(p.id, 'ai_article', {})}
+                                                                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition-colors"
                                                             >
-                                                                <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
+                                                                <Icon name="file-x" className="w-3.5 h-3.5" />
                                                             </button>
+                                                        )}
 
-                                                            {hasArticle && (
-                                                                <button
-                                                                    onClick={() => window.confirm(`Delete AI article for ${p.place_name}?`) && updatePlaceField(p.id, 'ai_article', {})}
-                                                                    className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition-colors"
-                                                                    title="Delete AI Article"
-                                                                >
-                                                                    <Icon name="file-x" className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-
-                                                        <a href={p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors" title="Open in Maps">
-                                                            <Icon name="navigation" className="w-3.5 h-3.5" />
-                                                        </a>
+                                                        <a
+    href={p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 text-blue-600 transition-colors"
+    title="Open in Maps"
+>
+    <Icon name="map-pinned" className="w-3.5 h-3.5" />
+</a>
                                                     </div>
                                                 </div>
                                             );
@@ -1979,6 +1930,8 @@
                                 </div>
                             </div>
                         )}
+
+
                         {/* TAB 2: MAP */}
                         <div className={`flex h-full w-full ${activeTab === 'map' ? 'flex' : 'hidden'} flex-col md:flex-row overflow-hidden`}>
 
