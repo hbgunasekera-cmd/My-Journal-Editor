@@ -723,32 +723,32 @@
 
 
             // --- TAB 1: PLACES FUNCTIONS ---
-const updatePlaceField = async (id, field, value) => {
-    // 1. Prepare update object. Ensure value isn't undefined to prevent DB errors.
-    const updateData = { [field]: value || null };
+            const updatePlaceField = async (id, field, value) => {
+                // 1. Prepare update object. Ensure value isn't undefined to prevent DB errors.
+                const updateData = { [field]: value || null };
 
-    // 2. Update timestamp if status changes
-    if (field === 'status') {
-        updateData.created_at = new Date().toISOString();
-    }
+                // 2. Update timestamp if status changes
+                if (field === 'status') {
+                    updateData.created_at = new Date().toISOString();
+                }
 
-    const { error } = await supabaseClient
-        .from('travel_bucket_list')
-        .update(updateData)
-        .eq('id', id);
+                const { error } = await supabaseClient
+                    .from('travel_bucket_list')
+                    .update(updateData)
+                    .eq('id', id);
 
-    if (!error) {
-        triggerToast('Updated Successfully');
-        refreshAllData();
-    } else {
-        // CRITICAL FIX: Log the actual error object to see the DB message
-        console.error(`Database Error (${field}):`, error.message);
-        console.error("Error Details:", error.details);
-        console.error("Error Hint:", error.hint);
-        
-        triggerToast(`Update Failed: ${error.message}`);
-    }
-};
+                if (!error) {
+                    triggerToast('Updated Successfully');
+                    refreshAllData();
+                } else {
+                    // CRITICAL FIX: Log the actual error object to see the DB message
+                    console.error(`Database Error (${field}):`, error.message);
+                    console.error("Error Details:", error.details);
+                    console.error("Error Hint:", error.hint);
+
+                    triggerToast(`Update Failed: ${error.message}`);
+                }
+            };
 
             const saveStagedLocation = async () => {
                 if (!stagedLocation) return;
@@ -1899,14 +1899,14 @@ const updatePlaceField = async (id, field, value) => {
                                                                     className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100 transition-colors"
                                                                 >
                                                                     <option value="Open">No Governing Authority</option>
-                                                                    <option value="DWC">Dept. of Wildlife (DWC)</option>
-                                                                    <option value="Forest Department">Dept. of Forest Conservation</option>
-                                                                    <option value="CCF">Central Cultural Fund (CCF)</option>
+                                                                    <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
+                                                                    <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
+                                                                    <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
                                                                     <option value="Coast Conservation Dept">Coastal Resource Management Dept.</option>
-                                                                    <option value="Archaeology Dept">Dept. of Archaeology</option>
-                                                                    <option value="Botanic Gardens">National Botanic Gardens</option>
-                                                                    <option value="NLDB">NLDB</option>
-                                                                    <option value="Local Authority">Local Authorities (PS)</option>
+                                                                    <option value="Department of Archaeology">Dept. of Archaeology</option>
+                                                                    <option value="Department of National Botanic Gardens">National Botanic Gardens</option>
+                                                                    <option value="National Livestock Development Board">NLDB</option>
+                                                                    <option value="Local Authorities">Local Authorities (PS)</option>
                                                                 </select>
                                                             </div>
                                                         </div>
