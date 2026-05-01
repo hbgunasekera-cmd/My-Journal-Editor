@@ -723,30 +723,32 @@
 
 
             // --- TAB 1: PLACES FUNCTIONS ---
-            const updatePlaceField = async (id, field, value) => {
+const updatePlaceField = async (id, field, value) => {
+    // 1. Prepare update object. Ensure value isn't undefined to prevent DB errors.
+    const updateData = { [field]: value || null };
 
-                // 1. Prepare the update object dynamically based on the field passed (category, restriction_level, or governing_org)
-                const updateData = { [field]: value };
+    // 2. Update timestamp if status changes
+    if (field === 'status') {
+        updateData.created_at = new Date().toISOString();
+    }
 
-                // 2. Logic: If the field being updated is 'status', also update 'created_at' to reflect the approval/move date
-                if (field === 'status') {
-                    updateData.created_at = new Date().toISOString();
-                }
+    const { error } = await supabaseClient
+        .from('travel_bucket_list')
+        .update(updateData)
+        .eq('id', id);
 
-                const { error } = await supabaseClient
-                    .from('travel_bucket_list')
-                    .update(updateData)
-                    .eq('id', id);
-
-                if (!error) {
-                    triggerToast('Updated Successfully');
-                    // Refreshing data ensures the UI reflects the new governing_org or restriction_level immediately
-                    refreshAllData();
-                } else {
-                    triggerToast('Update Failed');
-
-                }
-            };
+    if (!error) {
+        triggerToast('Updated Successfully');
+        refreshAllData();
+    } else {
+        // CRITICAL FIX: Log the actual error object to see the DB message
+        console.error(`Database Error (${field}):`, error.message);
+        console.error("Error Details:", error.details);
+        console.error("Error Hint:", error.hint);
+        
+        triggerToast(`Update Failed: ${error.message}`);
+    }
+};
 
             const saveStagedLocation = async () => {
                 if (!stagedLocation) return;
@@ -891,10 +893,10 @@
                 }
             };
 
-    const generatePlaceMetadata = async (place) => {
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
+            const generatePlaceMetadata = async (place) => {
+                const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
 
-    const metaPrompt = `Act as a Sri Lankan Geography & Environmental Regulation Expert. 
+                const metaPrompt = `Act as a Sri Lankan Geography & Environmental Regulation Expert. 
     Analyze the location: "${place.place_name}" (Locality: ${place.locality || 'Not Specified'}, Category: ${place.category}).
 
     STEP 1: Determine if this place is located within a larger protected area or reserve.
@@ -921,47 +923,47 @@
       "governing_org": "Open" | "Department of Wildlife Conservation" | "Department of Forest Conservation" | "Central Cultural Fund" | "Department of Archaeology" | "Department of National Botanic Gardens" | "National Livestock Development Board" | "Local Authorities"
     }`;
 
-    try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: metaPrompt }] }],
-                generationConfig: { 
-                    response_mime_type: "application/json", 
-                    temperature: 0.1 
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: metaPrompt }] }],
+                            generationConfig: {
+                                response_mime_type: "application/json",
+                                temperature: 0.1
+                            }
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+
+                    const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
+
+                    // --- BUSINESS RULE OVERRIDE ---
+                    // Force 'Low' restriction if governing body is 'Local Authorities'
+                    let finalRestriction = aiJson.restriction_level;
+                    if (aiJson.governing_org === 'Local Authorities') {
+                        finalRestriction = 'Low';
+                    }
+
+                    // Update Database
+                    const { error } = await supabaseClient
+                        .from('travel_bucket_list')
+                        .update({
+                            restriction_level: finalRestriction, // Use the enforced value
+                            governing_org: aiJson.governing_org
+                        })
+                        .eq('id', place.id);
+
+                    if (error) throw error;
+                    return true;
+                } catch (err) {
+
+                    return false;
                 }
-            })
-        });
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-        
-        const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
-
-        // --- BUSINESS RULE OVERRIDE ---
-        // Force 'Low' restriction if governing body is 'Local Authorities'
-        let finalRestriction = aiJson.restriction_level;
-        if (aiJson.governing_org === 'Local Authorities') {
-            finalRestriction = 'Low';
-        }
-
-        // Update Database
-        const { error } = await supabaseClient
-            .from('travel_bucket_list')
-            .update({
-                restriction_level: finalRestriction, // Use the enforced value
-                governing_org: aiJson.governing_org
-            })
-            .eq('id', place.id);
-
-        if (error) throw error;
-        return true;
-    } catch (err) {
-       
-        return false;
-    }
-};
+            };
 
             const bulkUpdateMetadata = async () => {
                 // Only target places marked 'done' where metadata is still default ('None'/'Open')
@@ -1897,14 +1899,14 @@
                                                                     className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100 transition-colors"
                                                                 >
                                                                     <option value="Open">No Governing Authority</option>
-                                                                    <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
-                                                                    <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
-                                                                    <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
-                                                                    <option value="Central Cultural FundCoast Conservation & Coastal Resource Management Department">Coastal Resource Management Dept.</option>
-                                                                    <option value="Department of Archaeology">Dept. of Archaeology</option>
-                                                                    <option value="Department of National Botanic Gardens">National Botanic Gardens</option>
-                                                                    <option value="National Livestock Development Board">NLDB</option>
-                                                                    <option value="Local Authorities">Local Authorities (PS)</option>
+                                                                    <option value="DWC">Dept. of Wildlife (DWC)</option>
+                                                                    <option value="Forest Department">Dept. of Forest Conservation</option>
+                                                                    <option value="CCF">Central Cultural Fund (CCF)</option>
+                                                                    <option value="Coast Conservation Dept">Coastal Resource Management Dept.</option>
+                                                                    <option value="Archaeology Dept">Dept. of Archaeology</option>
+                                                                    <option value="Botanic Gardens">National Botanic Gardens</option>
+                                                                    <option value="NLDB">NLDB</option>
+                                                                    <option value="Local Authority">Local Authorities (PS)</option>
                                                                 </select>
                                                             </div>
                                                         </div>
