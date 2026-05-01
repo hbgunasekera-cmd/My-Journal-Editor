@@ -757,7 +757,7 @@
                         ...stagedLocation,
                         status: 'pending',
                         restriction_level: 'None',
-                        ticket_required: false,
+                        governing_org: 'Open',
                         created_at: new Date()
                     }]);
 
@@ -891,10 +891,10 @@
                 }
             };
 
-            const generatePlaceMetadata = async (place) => {
-                const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
+    const generatePlaceMetadata = async (place) => {
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
 
-                const metaPrompt = `Act as a Sri Lankan Geography & Environmental Regulation Expert. 
+    const metaPrompt = `Act as a Sri Lankan Geography & Environmental Regulation Expert. 
     Analyze the location: "${place.place_name}" (Locality: ${place.locality || 'Not Specified'}, Category: ${place.category}).
 
     STEP 1: Determine if this place is located within a larger protected area or reserve.
@@ -921,47 +921,47 @@
       "governing_org": "Open" | "Department of Wildlife Conservation" | "Department of Forest Conservation" | "Central Cultural Fund" | "Department of Archaeology" | "Department of National Botanic Gardens" | "National Livestock Development Board" | "Local Authorities"
     }`;
 
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: metaPrompt }] }],
-                            generationConfig: {
-                                response_mime_type: "application/json",
-                                temperature: 0.1
-                            }
-                        })
-                    });
-
-                    const data = await response.json();
-                    if (data.error) throw new Error(data.error.message);
-
-                    const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
-
-                    // --- BUSINESS RULE OVERRIDE ---
-                    // Force 'Low' restriction if governing body is 'Local Authorities'
-                    let finalRestriction = aiJson.restriction_level;
-                    if (aiJson.governing_org === 'Local Authorities') {
-                        finalRestriction = 'Low';
-                    }
-
-                    // Update Database
-                    const { error } = await supabaseClient
-                        .from('travel_bucket_list')
-                        .update({
-                            restriction_level: finalRestriction, // Use the enforced value
-                            governing_org: aiJson.governing_org
-                        })
-                        .eq('id', place.id);
-
-                    if (error) throw error;
-                    return true;
-                } catch (err) {
-                    triggerToast("Metadata AI Error");
-                    return false;
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: metaPrompt }] }],
+                generationConfig: { 
+                    response_mime_type: "application/json", 
+                    temperature: 0.1 
                 }
-            };
+            })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+        
+        const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
+
+        // --- BUSINESS RULE OVERRIDE ---
+        // Force 'Low' restriction if governing body is 'Local Authorities'
+        let finalRestriction = aiJson.restriction_level;
+        if (aiJson.governing_org === 'Local Authorities') {
+            finalRestriction = 'Low';
+        }
+
+        // Update Database
+        const { error } = await supabaseClient
+            .from('travel_bucket_list')
+            .update({
+                restriction_level: finalRestriction, // Use the enforced value
+                governing_org: aiJson.governing_org
+            })
+            .eq('id', place.id);
+
+        if (error) throw error;
+        return true;
+    } catch (err) {
+       
+        return false;
+    }
+};
 
             const bulkUpdateMetadata = async () => {
                 // Only target places marked 'done' where metadata is still default ('None'/'Open')
@@ -1545,7 +1545,7 @@
                                 locality: suggestion.district,
                                 status: 'pending',
                                 restriction_level: 'None',
-                                ticket_required: false,
+                                governing_org: 'Open',
                                 created_at: new Date().toISOString()
                             }]);
 
