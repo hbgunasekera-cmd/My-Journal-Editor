@@ -929,7 +929,7 @@
                             contents: [{ parts: [{ text: metaPrompt }] }],
                             generationConfig: {
                                 response_mime_type: "application/json",
-                                temperature: 0.1 // Lowered temperature for higher factual accuracy
+                                temperature: 0.1
                             }
                         })
                     });
@@ -939,20 +939,26 @@
 
                     const aiJson = JSON.parse(data.candidates[0].content.parts[0].text);
 
+                    // --- BUSINESS RULE OVERRIDE ---
+                    // Force 'Low' restriction if governing body is 'Local Authorities'
+                    let finalRestriction = aiJson.restriction_level;
+                    if (aiJson.governing_org === 'Local Authorities') {
+                        finalRestriction = 'Low';
+                    }
+
                     // Update Database
                     const { error } = await supabaseClient
                         .from('travel_bucket_list')
                         .update({
-                            restriction_level: aiJson.restriction_level,
-                            governing_org: aiJson.governing_org,
-                            // Optional: You could add a 'parent_area' column to your DB if you want to store that context
+                            restriction_level: finalRestriction, // Use the enforced value
+                            governing_org: aiJson.governing_org
                         })
                         .eq('id', place.id);
 
                     if (error) throw error;
                     return true;
                 } catch (err) {
-                    console.error("Metadata AI Error:", err);
+                    triggerToast("Metadata AI Error");
                     return false;
                 }
             };
