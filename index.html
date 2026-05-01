@@ -894,18 +894,32 @@
             const generatePlaceMetadata = async (place) => {
                 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
 
-                const metaPrompt = `Act as a Sri Lankan travel expert. For the place "${place.place_name}" in ${place.locality || 'Sri Lanka'} (Category: ${place.category}), determine the governing authority and restriction level.
-    
-    Return ONLY a JSON object with this exact structure:
+                const metaPrompt = `Act as a Sri Lankan Geography & Environmental Regulation Expert. 
+    Analyze the location: "${place.place_name}" (Locality: ${place.locality || 'Not Specified'}, Category: ${place.category}).
+
+    STEP 1: Determine if this place is located within a larger protected area or reserve.
+    Examples: 
+    - "Chimney Pool" is inside "Horton Plains National Park".
+    - "Dothaluoya Trail" or "Duwili Ella" is inside "Knuckles Forest Reserve".
+    - "Piduruthalagala" is a "Strict Natural Reserve".
+
+    STEP 2: Assign Governing Body based on the PARENT location:
+    - National Parks/Sanctuaries -> "Department of Wildlife Conservation"
+    - Forest Reserves/Sinharaja/Knuckles -> "Department of Forest Conservation"
+    - Heritage Sites (Sigiriya/Anuradhapura) -> "Central Cultural Fund" or "Department of Archaeology"
+
+    STEP 3: Set Restriction Level:
+    - "None": Public areas/beaches.
+    - "Low": Local trails with no entry fee.
+    - "High": National Parks/Reserves requiring tickets/permits.
+    - "Restricted": Strict Natural Reserves (e.g., Ritigala Peak, Hakgala SNR).
+
+    Return ONLY this JSON structure:
     {
+      "parent_area": "Name of the National Park or Reserve if applicable",
       "restriction_level": "None" | "Low" | "High" | "Restricted",
       "governing_org": "Open" | "Department of Wildlife Conservation" | "Department of Forest Conservation" | "Central Cultural Fund" | "Department of Archaeology" | "Department of National Botanic Gardens" | "National Livestock Development Board" | "Local Authorities"
-    }
-
-    Rules:
-    1. "None" for public roads/beaches. "Low" for popular parks. "High" for protected zones.
-    2. "Open" if no ticket or office exists.
-    3. Match the governing_org exactly to the list provided.`;
+    }`;
 
                 try {
                     const response = await fetch(API_URL, {
@@ -913,7 +927,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             contents: [{ parts: [{ text: metaPrompt }] }],
-                            generationConfig: { response_mime_type: "application/json", temperature: 0.2 }
+                            generationConfig: {
+                                response_mime_type: "application/json",
+                                temperature: 0.1 // Lowered temperature for higher factual accuracy
+                            }
                         })
                     });
 
@@ -927,7 +944,8 @@
                         .from('travel_bucket_list')
                         .update({
                             restriction_level: aiJson.restriction_level,
-                            governing_org: aiJson.governing_org
+                            governing_org: aiJson.governing_org,
+                            // Optional: You could add a 'parent_area' column to your DB if you want to store that context
                         })
                         .eq('id', place.id);
 
