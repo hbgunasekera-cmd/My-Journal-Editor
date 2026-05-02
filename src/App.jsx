@@ -21,15 +21,30 @@ import {
 
 // --- Initialization ---
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://vpslgikpaintiuayajmx.supabase.co';
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
-const ARTICLE_KEY = import.meta.env.VITE_ARTICLE_KEY;
-const WEATHER_KEY = import.meta.env.VITE_WEATHER_KEY;
+/**
+ * Application Configuration
+ * Centralizes environment variables from Vercel/Vite and local .env files.
+ */
+const CONFIG = {
+  SUPABASE: {
+    URL: import.meta.env.VITE_SUPABASE_URL || 'https://vpslgikpaintiuayajmx.supabase.co',
+    KEY: import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44',
+  },
+  API_KEYS: {
+    ARTICLE: import.meta.env.VITE_ARTICLE_KEY,
+    WEATHER: import.meta.env.VITE_WEATHER_KEY,
+  }
+};
 
-console.log("Debug Keys:", import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+// Destructure for easy access throughout your app
+const { URL: SUPABASE_URL, KEY: SUPABASE_KEY } = CONFIG.SUPABASE;
+const { ARTICLE_KEY, WEATHER_KEY } = CONFIG.API_KEYS;
 
-// Correct initialization for the supabase client
-export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+/**
+ * Initialize Supabase Client
+ * Uses the URLs and Keys sourced from Vercel/Vite environment variables.
+ */
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // --- Leaflet Marker Fix ---
 if (typeof window !== 'undefined') {
@@ -181,34 +196,21 @@ function App() {
 
 
   useEffect(() => {
+  if (isLoggedIn) {
+    /**
+     * Prioritize Vercel/Vite environment variable (VITE_ARTICLE_KEY).
+     * Fallback to LocalStorage if the environment variable is not set.
+     */
+    const key = import.meta.env.VITE_ARTICLE_KEY || localStorage.getItem('ARTICLE_KEY');
 
-    if (isLoggedIn) {
-      let key = null;
-
-      // 1. TRY: Vercel/System Environment Variable
-      try {
-        if (typeof process !== 'undefined' && process.env?.ARTICLE_KEY) {
-          key = process.env.VITE_ARTICLE_KEY;
-        }
-      } catch (e) {
-        // Environment variables are typically for build-time or Node environments
-      }
-
-      // 2. FALLBACK: LocalStorage (if not found in env)
-      if (!key) {
-        key = localStorage.getItem('ARTICLE_KEY');
-      }
-
-      
-      // Set to global window object and local variable if key exists
-      if (key) {
-        window.ARTICLE_KEY = key;
-        
-      } else {
-        triggerToast("No API key provided. AI features will be limited.");
-      }
+    if (key) {
+      // Assigning to window for global access as required by your app logic
+      window.ARTICLE_KEY = key;
+    } else {
+      triggerToast("No API key provided. AI features will be limited.");
     }
-  }, [isLoggedIn]);
+  }
+}, [isLoggedIn]);
 
   // --- 1. ICON SYSTEM ---
 
