@@ -17,9 +17,10 @@ import {
 
 // --- Initialization ---
 // It is highly recommended to move these to a .env.local file
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://vpslgikpaintiuayajmx.supabase.co';
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
-const WEATHER_KEY = import.meta.env.VITE_WEATHER_KEY || 'f757a5fe02ebcf28154b642fa5e7738d';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+const ARTICLE_KEY = import.meta.env.VITE_ARTICLE_KEY;
+const WEATHER_KEY = import.meta.env.VITE_WEATHER_KEY;
 
 // Correct initialization for the supabase client
 export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -170,8 +171,8 @@ function App() {
 
       // 1. TRY: Vercel/System Environment Variable
       try {
-        if (typeof process !== 'undefined' && process.env?.Article_Key) {
-          key = process.env.Article_Key;
+        if (typeof process !== 'undefined' && process.env?.ARTICLE_KEY) {
+          key = process.env.VITE_WEATHER_KEY;
         }
       } catch (e) {
         // Environment variables are typically for build-time or Node environments
@@ -179,7 +180,7 @@ function App() {
 
       // 2. FALLBACK: LocalStorage (if not found in env)
       if (!key) {
-        key = localStorage.getItem('Article_Key');
+        key = localStorage.getItem('ARTICLE_KEY');
       }
 
       // 3. FINAL FALLBACK: User Prompt (if still not found)
@@ -187,16 +188,16 @@ function App() {
         const userInput = prompt("Enter Gemini API Key (Stored locally in your browser, not GitHub):");
         if (userInput && userInput.trim() !== "") {
           key = userInput.trim();
-          localStorage.setItem('Article_Key', key);
+          localStorage.setItem('ARTICLE_KEY', key);
         }
       }
 
       // Set to global window object and local variable if key exists
       if (key) {
         window.GEMINI_API_KEY = key;
-        console.log("Gemini API Key initialized.");
+        
       } else {
-        console.warn("No API key provided. AI features will be limited.");
+        triggerToast("No API key provided. AI features will be limited.");
       }
     }
   }, [isLoggedIn]);
@@ -243,7 +244,7 @@ function App() {
       navigator.geolocation.getCurrentPosition((pos) => {
         setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       }, (err) => {
-        console.warn("GPS Access Denied, falling back to HomePoint");
+        triggerToast("GPS Access Denied, falling back to HomePoint");
         setLocationSource('home'); // Auto-fallback
       });
     } else {
@@ -318,7 +319,7 @@ function App() {
             mapRef.current.removeControl(routingControl.current);
           }
         } catch (e) {
-          console.warn("Cleanup error ignored:", e);
+          triggerToast("Cleanup error ignored:", e);
         }
         routingControl.current = null;
       }
@@ -510,7 +511,7 @@ function App() {
   const initGoogle = async () => {
 
     if (!autocompleteRef.current) {
-      console.warn("Autocomplete input not found in DOM yet.");
+      triggerToast("Autocomplete input not found in DOM yet.");
       return;
     }
 
@@ -568,11 +569,7 @@ function App() {
       triggerToast('Updated Successfully');
       refreshAllData();
     } else {
-      // CRITICAL FIX: Log the actual error object to see the DB message
-      console.error(`Database Error (${field}):`, error.message);
-      console.error("Error Details:", error.details);
-      console.error("Error Hint:", error.hint);
-
+      
       triggerToast(`Update Failed: ${error.message}`);
     }
   };
