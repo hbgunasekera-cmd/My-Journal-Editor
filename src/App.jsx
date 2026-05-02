@@ -19,16 +19,14 @@ import {
   ShieldAlert, PlusCircle, HelpCircle
 } from 'lucide-react';
 
+
 // --- Initialization ---
 
-/**
- * Application Configuration
- * Centralizes environment variables from Vercel/Vite and local .env files.
- */
 const CONFIG = {
   SUPABASE: {
-    URL: import.meta.env.VITE_SUPABASE_URL || 'https://vpslgikpaintiuayajmx.supabase.co',
-    KEY: import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44',
+    // Vite automatically picks these up from .env.local (local) or Vercel (production)
+    URL: import.meta.env.VITE_SUPABASE_URL,
+    KEY: import.meta.env.VITE_SUPABASE_KEY,
   },
   API_KEYS: {
     ARTICLE: import.meta.env.VITE_ARTICLE_KEY,
@@ -36,15 +34,13 @@ const CONFIG = {
   }
 };
 
-// Destructure for easy access throughout your app
+// Destructure for the rest of your app
 const { URL: SUPABASE_URL, KEY: SUPABASE_KEY } = CONFIG.SUPABASE;
-const { ARTICLE_KEY, WEATHER_KEY } = CONFIG.API_KEYS;
+const { ARTICLE: ARTICLE_KEY, WEATHER: WEATHER_KEY } = CONFIG.API_KEYS;
 
-/**
- * Initialize Supabase Client
- * Uses the URLs and Keys sourced from Vercel/Vite environment variables.
- */
+// Initialize Client
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 
 // --- Leaflet Marker Fix ---
 if (typeof window !== 'undefined') {
