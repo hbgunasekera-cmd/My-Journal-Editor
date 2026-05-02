@@ -1490,64 +1490,73 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       {/* GLOBAL HEADER */}
-      <header className="h-16 bg-white border-b flex items-center justify-between px-6 z-[1001] shrink-0 shadow-sm">
-        <div className="flex items-center gap-6">
-          <h1 className="text-sm font-black uppercase tracking-tighter text-indigo-900 hidden sm:block">My Journal Admin</h1>
-          <nav className="flex bg-slate-100 p-1 rounded-xl">
-            {['places', 'map', 'dashboard'].map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{t}</button>
+     <header className="h-16 bg-white flex items-center justify-between px-6 z-[1001] shrink-0 shadow-sm">
+  <div className="flex items-center gap-6">
+    <h1 className="text-sm font-black uppercase tracking-tighter text-indigo-900 hidden sm:block">
+      My Journal Admin
+    </h1>
+    <nav className="flex bg-slate-100 p-1 rounded-xl">
+      {['places', 'map', 'dashboard'].map(t => (
+        <button 
+          key={t} 
+          onClick={() => setActiveTab(t)} 
+          className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+            activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          {t}
+        </button>
+      ))}
+    </nav>
+  </div>
+
+  <div className="flex items-center gap-3">
+    {/* Internal wrapper border-b removed for a seamless look */}
+    <div className="flex flex-wrap items-center gap-3 p-4 bg-white sticky top-0 z-[1000]">
+      {/* 1. Google Maps Search Input */}
+      <div className="relative flex items-center">
+        <input
+          ref={autocompleteRef}
+          placeholder="Search Maps"
+          className="w-48 sm:w-64 px-4 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500/20"
+        />
+      </div>
+
+      {/* 2. Category & Save Controls (Conditional) */}
+      {stagedLocation && (
+        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
+          <select
+            value={stagedLocation.category}
+            onChange={(e) => setStagedLocation({ ...stagedLocation, category: e.target.value })}
+            className="px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
+          >
+            {VALID_CATEGORIES.map(c => (
+              <option key={c} value={c}>{c}</option>
             ))}
-          </nav>
+          </select>
+
+          <button
+            onClick={saveStagedLocation}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 transition-all active:scale-95"
+          >
+            Save
+          </button>
+
+          <button
+            onClick={() => {
+              setStagedLocation(null);
+              if (autocompleteRef.current) autocompleteRef.current.value = '';
+            }}
+            className="p-2 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl transition-colors"
+            title="Cancel"
+          >
+            <Icon name="x" className="w-3.5 h-3.5" />
+          </button>
         </div>
-
-        <div className="flex items-center gap-3">
-
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-white border-b sticky top-0 z-[1000]">
-            {/* 1. Google Maps Search Input */}
-            <div className="relative flex items-center">
-              <input
-                ref={autocompleteRef}
-                placeholder="Search Maps"
-                className="w-48 sm:w-64 px-4 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
-              {/* Note: Google automatically renders the dropdown list here */}
-            </div>
-
-            {/* 2. Category & Save Controls (Conditional) */}
-            {stagedLocation && (
-              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
-                <select
-                  value={stagedLocation.category}
-                  onChange={(e) => setStagedLocation({ ...stagedLocation, category: e.target.value })}
-                  className="px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer hover:bg-indigo-100 transition-colors"
-                >
-                  {VALID_CATEGORIES.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={saveStagedLocation}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 transition-all active:scale-95"
-                >
-                  Save
-                </button>
-
-                <button
-                  onClick={() => {
-                    setStagedLocation(null);
-                    if (autocompleteRef.current) autocompleteRef.current.value = '';
-                  }}
-                  className="p-2 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl transition-colors"
-                  title="Cancel"
-                >
-                  <Icon name="x" className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      )}
+    </div>
+  </div>
+</header>
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 overflow-hidden relative">
