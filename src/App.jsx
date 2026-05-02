@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import L from 'leaflet';
+import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
+
+// --- Leaflet & Routing ---
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
-// --- Icons & UI Components ---
+// --- Icons (Consolidated lucide-react) ---
 import {
-  MapPin, Mountain, Waves, Navigation, Camera, Plus, Save,
+  MapPin,MapPinned, Mountain, Waves, Navigation, Camera, Plus, Save,
   Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning,
   Snowflake, CloudFog, Wind, Compass, X, Trash2, Image,
   CheckCircle, Circle, Navigation2, Home, Sparkles,
@@ -16,11 +20,13 @@ import {
 } from 'lucide-react';
 
 // --- Initialization ---
-// It is highly recommended to move these to a .env.local file
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://vpslgikpaintiuayajmx.supabase.co';
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
 const ARTICLE_KEY = import.meta.env.VITE_ARTICLE_KEY;
 const WEATHER_KEY = import.meta.env.VITE_WEATHER_KEY;
+
+console.log("Debug Keys:", import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 // Correct initialization for the supabase client
 export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -46,7 +52,7 @@ const VALID_CATEGORIES = [
 
 /**
  * Optimized Icon Wrapper using native Lucide-React components.
- * This replaces the manual DOM injection for better React stability.[cite: 1, 2]
+ * This replaces the manual DOM injection for better React stability.[cite: 1]
  */
 const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
   const icons = {
@@ -57,7 +63,16 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'camera': Camera, 'layout-grid': LayoutGrid, 'video': Video,
     'file-text': FileText, 'file-x': FileX, 'refresh-cw': RefreshCw,
     'heart': Heart, 'message-square': MessageSquare, 'shield-alert': ShieldAlert,
-    'plus-circle': PlusCircle
+    'plus-circle': PlusCircle,
+    // --- Weather Registry Integration ---
+    'sun': Sun, 
+    'cloud': Cloud, 
+    'cloud-rain': CloudRain,
+    'cloud-drizzle': CloudDrizzle, 
+    'cloud-lightning': CloudLightning,
+    'snowflake': Snowflake, 
+    'cloud-fog': CloudFog, 
+    'wind': Wind
   };
 
   const LucideIcon = icons[name] || HelpCircle;
@@ -70,7 +85,8 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
 });
 
 /**
- * Dynamic Weather Icon Component mapping API conditions to Lucide icons.[cite: 2]
+ * Dynamic Weather Icon Component mapping API conditions to Lucide icons.
+ * Note: Uses direct Lucide components for color flexibility in route cards.
  */
 const WeatherIcon = ({ condition }) => {
   const weatherMap = {
@@ -172,7 +188,7 @@ function App() {
       // 1. TRY: Vercel/System Environment Variable
       try {
         if (typeof process !== 'undefined' && process.env?.ARTICLE_KEY) {
-          key = process.env.VITE_WEATHER_KEY;
+          key = process.env.VITE_ARTICLE_KEY;
         }
       } catch (e) {
         // Environment variables are typically for build-time or Node environments
@@ -183,18 +199,10 @@ function App() {
         key = localStorage.getItem('ARTICLE_KEY');
       }
 
-      // 3. FINAL FALLBACK: User Prompt (if still not found)
-      if (!key) {
-        const userInput = prompt("Enter Gemini API Key (Stored locally in your browser, not GitHub):");
-        if (userInput && userInput.trim() !== "") {
-          key = userInput.trim();
-          localStorage.setItem('ARTICLE_KEY', key);
-        }
-      }
-
+      
       // Set to global window object and local variable if key exists
       if (key) {
-        window.GEMINI_API_KEY = key;
+        window.ARTICLE_KEY = key;
         
       } else {
         triggerToast("No API key provided. AI features will be limited.");
@@ -1490,7 +1498,7 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       {/* GLOBAL HEADER */}
-     <header className="h-16 bg-white flex items-center justify-between px-6 z-[1001] shrink-0 shadow-sm">
+      <header className="h-16 bg-white flex items-center justify-between px-6 z-[1001] shrink-0 shadow-sm">
   <div className="flex items-center gap-6">
     <h1 className="text-sm font-black uppercase tracking-tighter text-indigo-900 hidden sm:block">
       My Journal Admin
@@ -1511,7 +1519,7 @@ function App() {
   </div>
 
   <div className="flex items-center gap-3">
-    {/* Internal wrapper border-b removed for a seamless look */}
+    {/* Removed border-b from this inner container as well */}
     <div className="flex flex-wrap items-center gap-3 p-4 bg-white sticky top-0 z-[1000]">
       {/* 1. Google Maps Search Input */}
       <div className="relative flex items-center">
@@ -1749,7 +1757,7 @@ function App() {
                           className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 text-blue-600 transition-colors"
                           title="Open in Maps"
                         >
-                          <Icon name="map-pinned" className="w-3.5 h-3.5" />
+                          <MapPinned className="w-3.5 h-3.5" />
                         </a>
                       </div>
                     </div>
