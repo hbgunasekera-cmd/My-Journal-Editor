@@ -661,7 +661,7 @@ function App() {
   };
 
   const generateTravelArticle = async (place) => {
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${ARTICLE_KEY}`;
 
     const contextPrompt = `Write a professional travel journal entry for a ${place.category} named "${place.place_name}" located in ${place.locality || 'Sri Lanka'}. 
     
@@ -724,7 +724,7 @@ function App() {
   };
 
   const generatePlaceMetadata = async (place) => {
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.GEMINI_API_KEY}`;
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.ARTICLE_KEY}`;
 
     const metaPrompt = `Act as a Sri Lankan Geography & Environmental Regulation Expert. 
     Analyze the location: "${place.place_name}" (Locality: ${place.locality || 'Not Specified'}, Category: ${place.category}).
