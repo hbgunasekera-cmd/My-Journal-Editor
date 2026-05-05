@@ -462,19 +462,42 @@ function App() {
 
 
   // --- 5. SEARCH & FILTER LOGIC ---
-  React.useEffect(() => {
-    if (!searchTerm) {
-      setFilteredPlaces(places);
-      return;
-    }
-    const lowSearch = searchTerm.toLowerCase();
-    const filtered = places.filter(p => {
-      const name = p?.place_name ? String(p.place_name).toLowerCase() : "";
-      const cat = p?.category ? String(p.category).toLowerCase() : "";
-      return name.includes(lowSearch) || cat.includes(lowSearch);
+ 
+React.useEffect(() => {
+  // 1. Reset to full list if search is empty
+  if (!searchTerm.trim()) {
+    setFilteredPlaces(places);
+    return;
+  }
+
+  const lowSearch = searchTerm.toLowerCase();
+
+  const filtered = places.filter(p => {
+    // 2. Extract values with fallbacks to empty strings
+    const name = String(p?.place_name || "").toLowerCase();
+    const cat = String(p?.category || "").toLowerCase();
+    const locality = String(p?.locality || "").toLowerCase();
+
+    // 3. Consistently check all relevant fields
+    return (
+      name.includes(lowSearch) || 
+      cat.includes(lowSearch) || 
+      locality.includes(lowSearch)
+    );
+  });
+
+  setFilteredPlaces(filtered);
+}, [searchTerm, places]);
+
+  useEffect(() => {
+  if (filteredPlaces.length > 0 && searchTerm.length > 2 && mapRef.current) {
+    const firstMatch = filteredPlaces[0];
+    mapRef.current.flyTo([firstMatch.latitude, firstMatch.longitude], 12, {
+      animate: true,
+      duration: 1.5
     });
-    setFilteredPlaces(filtered);
-  }, [searchTerm, places]);
+  }
+}, [filteredPlaces, searchTerm]);
 
 
   const triggerToast = (msg) => {
@@ -621,14 +644,18 @@ function App() {
     // 1. Filtering Logic
     const filtered = places.filter(place => {
       const name = (place.place_name || "").toLowerCase();
-      const matchesSearch = name.includes(debouncedSearch.toLowerCase());
+      const locality = (place.locality || "").toLowerCase(); 
+      
+      const searchLower = debouncedSearch.toLowerCase();
+      const matchesSearch = name.includes(searchLower) || locality.includes(searchLower); 
+      
       const matchesCat = filterCategory === 'All' || place.category === filterCategory;
       const matchesStatus = filterStatus === 'All' || place.status === filterStatus;
 
       return matchesSearch && matchesCat && matchesStatus;
     });
 
-    // 2. Sorting Logic (CRITICAL: This must return the final array)
+    // 2. Sorting Logic 
     return [...filtered].sort((a, b) => {
       if (sortBy === 'distance') {
         const distA = L.latLng(sortCenter.lat, sortCenter.lng)
@@ -638,7 +665,7 @@ function App() {
         return distA - distB;
       }
 
-      // Default: Sort by Newest (Date)
+      
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
 
