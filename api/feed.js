@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ error: error.message });
 
   const rssItems = places.map(place => {
-    // MATCH THIS TO YOUR CLAIMED DOMAIN: my-journal-view.vercel.app
+    // 2. DOMAIN MATCHING: Using "view" to match your Pinterest Claim
     const rawUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
     const escapedUrl = rawUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
@@ -50,9 +50,8 @@ export default async function handler(req, res) {
          xmlns:atom="http://www.w3.org/2005/Atom">
       <channel>
         <title>My Journal | Sri Lanka Exploration</title>
-        {/* MUST MATCH CLAIMED DOMAIN */}
+        {/* 3. CHANNEL LINK: Must match the claimed domain exactly */}
         <link>https://my-journal-view.vercel.app/</link>
-        {/* The 'self' link can stay as the editor because that is where the file physically lives */}
         <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
         <description>Hidden waterfalls, mountain treks, and cinematic drone footage by Hasitha Gunasekera.</description>
         <language>en-us</language>
