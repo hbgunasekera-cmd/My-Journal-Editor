@@ -1244,9 +1244,17 @@ function App() {
         loyaltyStatus = "Unique Visit";
       }
 
-      // 2. Bot Detection
-      const botPatterns = ['bot', 'spider', 'crawl', 'lighthouse', 'slurp', 'facebookexternalhit', 'twitterbot'];
-      const isBot = botPatterns.some(pattern => lowerUA.includes(pattern));
+      // 2. Enhanced Bot Detection (Filtering Platform Checks & Headless Browsers)
+      const botPatterns = [
+        'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
+        'facebookexternalhit', 'twitterbot', 'messenger',
+        'google-safety', 'headless', 'inspect', 'preview'
+      ];
+
+      // Also check for the "HeadlessChrome" pattern or perfectly round versions like .0.0.0
+      const isBot = botPatterns.some(pattern => lowerUA.includes(pattern)) ||
+        lowerUA.includes('headlesschrome') ||
+        /\.0\.0\.0/.test(ua); // Catches common automation versioning
 
       // 3. Device Type
       let type = 'Desktop';
@@ -1261,26 +1269,27 @@ function App() {
       else if (ua.includes('Mac OS')) os = 'macOS';
       else if (ua.includes('Linux')) os = 'Linux';
 
-      // 5. Source Detection (Enhanced for Incognito/Private Browsing)
+      // 5. Source Detection (Prioritizing My Journal YouTube Links)
       let source = "Direct";
 
-      // Check User Agent (In-App Browsers)
-      if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
-      else if (lowerUA.includes('instagram')) source = 'Instagram';
-      else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
-      else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source = 'YouTube';
-      else if (lowerUA.includes('messenger')) source = 'Messenger';
-
-      // Check URL Parameters (Best for Incognito/Firefox clicks)
-      // Assumes v.url contains the full address or query string
-      if (source === "Direct" && v.url) {
+      // Check URL Parameters (Highest Priority for YouTube Incognito)
+      if (v.url) {
         const urlLower = v.url.toLowerCase();
+        // Captures: ?utm_source=youtube OR YouTube's native 'si=' share parameter
         if (urlLower.includes('utm_source=youtube') || urlLower.includes('si=')) {
           source = 'YouTube';
         }
       }
 
-      // Check Referrer (Standard Web Redirects)
+      // Check User Agent (In-App Browsers)
+      if (source === "Direct") {
+        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
+        else if (lowerUA.includes('instagram')) source = 'Instagram';
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
+        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source = 'YouTube';
+      }
+
+      // Check Referrer (Fallback for standard web redirects)
       if (source === "Direct" && v.referrer) {
         const ref = v.referrer.toLowerCase();
         if (ref.includes('youtube.com') || ref.includes('youtu.be')) source = 'YouTube';
