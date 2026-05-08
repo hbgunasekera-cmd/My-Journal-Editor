@@ -1236,10 +1236,10 @@ function App() {
     const parseUA = (v) => {
       const fullUA = v.user_agent || "";
 
-      // 1. EXTRACT SOURCE FROM COMBINED STRING
-      // Format: "Mozilla/5.0...-Pinterest"
+      // 1. EXTRACT TAGGED SOURCE
+      // Splits the "Mozilla/5.0...-Source" format used in logVisit
       const parts = fullUA.split('-');
-      const identifiedSource = parts.length > 1 ? parts.pop() : "Direct";
+      const taggedSource = parts.length > 1 ? parts.pop() : "Direct";
       const ua = parts.join('-'); // Reconstruct original User Agent
 
       const lowerUA = ua.toLowerCase();
@@ -1255,8 +1255,8 @@ function App() {
       // 3. Enhanced Bot Detection
       const botPatterns = [
         'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
-        'facebookexternalhit', 'twitterbot', 'messenger',
-        'google-safety', 'headless', 'inspect', 'preview', 'pinterestbot'
+        'facebookexternalhit', 'twitterbot', 'google-safety', 
+        'headless', 'inspect', 'preview', 'pinterestbot'
       ];
 
       const isBot = botPatterns.some(pattern => lowerUA.includes(pattern)) ||
@@ -1276,23 +1276,29 @@ function App() {
       else if (ua.includes('Mac OS')) os = 'macOS';
       else if (ua.includes('Linux')) os = 'Linux';
 
-      // 6. Final Source Selection
-      // Use the source extracted from the hyphenated User Agent string
-      let source = identifiedSource;
+      // 6. MULTI-LAYER SOURCE DETECTION
+      // Priority 1: Start with the tagged source from the hyphenated string
+      let source = taggedSource;
+
+      // Priority 2: If tagged as Direct, deep-scan the UA for In-App browsers
+      if (source === "Direct") {
+        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
+        else if (lowerUA.includes('messenger') || lowerUA.includes('fb_iab')) source = 'Messenger';
+        else if (lowerUA.includes('instagram')) source = 'Instagram';
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
+        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source = 'YouTube';
+        else if (lowerUA.includes('pinterest')) source = 'Pinterest';
+      }
 
       return { type, source, os, isBot, loyaltyStatus };
     };
 
-    // IDENTIFY LATEST VISIT: Sort by date descending
-    const sortedLatest = [...safeAnalytics].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const latestRecord = sortedLatest[0];
-
-    // Parse metrics for the most recent visitor
-    const latestMetrics = latestRecord ? { ...latestRecord, ...parseUA(latestRecord) } : null;
-
-    // Process all data for counters (chronological order for knownUsers Set)
+    // IDENTIFY LATEST VISIT: Use already parsed data for consistency
     const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const parsedData = sortedData.map(v => ({ ...v, ...parseUA(v) }));
+    
+    // Get the most recent record from the parsed list
+    const latestMetrics = [...parsedData].reverse()[0] || null;
 
     const getSortedMetrics = (data, keyOrFn) => {
       const counts = data.reduce((acc, item) => {
