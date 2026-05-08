@@ -7,26 +7,29 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // 1. CORS Preflight for Vercel
+  // 1. CORS Preflight & Security Allowlist (Bypasses Vercel Deployment Protection)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 2. Fetch data with 'done' status filter
+  // 2. Data Fetching: Filters for 'done' status to ensure Pins have photos/stories
   const { data: places, error } = await supabase
     .from('travel_bucket_list') 
     .select(`id, place_name, created_at, cover_photo_url, ai_article, status`)
-    .eq('status', 'done') // ✅ Only include completed journeys
+    .eq('status', 'done') 
     .order('created_at', { ascending: false })
     .limit(20);
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // 3. Construct RSS Items using the 'view' domain
+  // 3. Construct RSS Items using the Claimed 'view' domain
   const rssItems = places.map(place => {
+    // UTM source added for tracking in your custom logVisit dashboard logic
     const rawUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
+    
+    // XML Safety: Escaping ampersands to prevent "not well-formed" errors
     const escapedUrl = rawUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
     
@@ -45,7 +48,7 @@ export default async function handler(req, res) {
       </item>`;
   }).join('');
 
-  // 4. Construct the Full RSS XML
+  // 4. Construct the Full RSS XML with Atom 'self' reference
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
     <rss version="2.0" 
          xmlns:media="http://search.yahoo.com/mrss/" 
@@ -62,7 +65,7 @@ export default async function handler(req, res) {
       </channel>
     </rss>`;
 
-  // 5. Optimized Headers
+  // 5. Optimized Headers for Pinterest Crawler
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate'); 
   res.setHeader('Content-Type', 'application/xml; charset=utf-8'); 
   res.status(200).send(rssFeed.trim());
