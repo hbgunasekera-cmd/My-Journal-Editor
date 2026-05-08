@@ -1412,7 +1412,7 @@ function App() {
             latitude: suggestion.latitude,
             longitude: suggestion.longitude,
             category: suggestion.category,
-            locality: suggestion.district,
+            locality: suggestion.locality,
             status: 'pending',
             restriction_level: 'None',
             governing_org: 'Open',
