@@ -1234,18 +1234,25 @@ function App() {
     const knownUsers = new Set();
 
     const parseUA = (v) => {
-      const ua = v.user_agent || "";
+      const fullUA = v.user_agent || "";
+
+      // 1. EXTRACT SOURCE FROM COMBINED STRING
+      // Format: "Mozilla/5.0...-Pinterest"
+      const parts = fullUA.split('-');
+      const identifiedSource = parts.length > 1 ? parts.pop() : "Direct";
+      const ua = parts.join('-'); // Reconstruct original User Agent
+
       const lowerUA = ua.toLowerCase();
       const fingerprint = `${v.ip_address}_${ua}`;
 
-      // 1. Loyalty Check
+      // 2. Loyalty Check
       let loyaltyStatus = "Returning User";
       if (!knownUsers.has(fingerprint)) {
         knownUsers.add(fingerprint);
         loyaltyStatus = "Unique Visit";
       }
 
-      // 2. Enhanced Bot Detection (Filtering Platform Checks & Pinterest Crawlers)
+      // 3. Enhanced Bot Detection
       const botPatterns = [
         'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
         'facebookexternalhit', 'twitterbot', 'messenger',
@@ -1256,12 +1263,12 @@ function App() {
         lowerUA.includes('headlesschrome') ||
         /\.0\.0\.0/.test(ua);
 
-      // 3. Device Type
+      // 4. Device Type
       let type = 'Desktop';
       if (lowerUA.includes('tablet') || lowerUA.includes('ipad')) type = 'Tablet';
       else if (lowerUA.includes('mobile') || lowerUA.includes('android') || lowerUA.includes('iphone')) type = 'Mobile';
 
-      // 4. Operating System
+      // 5. Operating System
       let os = 'Other';
       if (ua.includes('Windows')) os = 'Windows';
       else if (ua.includes('Android')) os = 'Android';
@@ -1269,29 +1276,9 @@ function App() {
       else if (ua.includes('Mac OS')) os = 'macOS';
       else if (ua.includes('Linux')) os = 'Linux';
 
-      // 5. Refined Source Detection (Matching logVisit logic)
-      // Priority 1: Use the explicit 'source' column from the database if available
-      let source = v.source || "Direct";
-
-      // Priority 2: Check stored URL parameters or Referrer if source is still Direct
-      if (source === "Direct") {
-        const urlLower = (v.url || "").toLowerCase();
-        const ref = (v.referrer || "").toLowerCase();
-
-        // Pinterest Identification
-        if (urlLower.includes('utm_source=pinterest') || ref.includes('pinterest') || lowerUA.includes('pinterest')) {
-          source = 'Pinterest';
-        }
-        // YouTube Identification
-        else if (urlLower.includes('utm_source=youtube') || urlLower.includes('si=') || ref.includes('youtube') || ref.includes('youtu.be') || lowerUA.includes('youtube')) {
-          source = 'YouTube';
-        }
-        // Other Social Fallbacks
-        else if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
-        else if (lowerUA.includes('instagram')) source = 'Instagram';
-        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
-        else if (ref.includes('t.co')) source = 'X (Twitter)';
-      }
+      // 6. Final Source Selection
+      // Use the source extracted from the hyphenated User Agent string
+      let source = identifiedSource;
 
       return { type, source, os, isBot, loyaltyStatus };
     };
