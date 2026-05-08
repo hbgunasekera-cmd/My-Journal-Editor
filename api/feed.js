@@ -7,6 +7,15 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+  // 1. Handle CORS Preflight for Vercel Allowlist
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   const { data: places, error } = await supabase
     .from('travel_bucket_list') 
     .select(`id, place_name, created_at, cover_photo_url, ai_article`)
@@ -30,16 +39,20 @@ export default async function handler(req, res) {
         <link>${escapedUrl}</link>
         <description><![CDATA[${description}]]></description>
         <pubDate>${new Date(place.created_at).toUTCString()}</pubDate>
-        <guid isPermaLink="false">my-journal-${place.id}</guid>
+        <guid isPermaLink="true">${escapedUrl}</guid>
         <media:content url="${escapedMediaUrl}" medium="image" />
       </item>`;
   }).join('');
 
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
-    <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <rss version="2.0" 
+         xmlns:media="http://search.yahoo.com/mrss/" 
+         xmlns:content="http://purl.org/rss/1.0/modules/content/"
+         xmlns:atom="http://www.w3.org/2005/Atom">
       <channel>
         <title>My Journal | Sri Lanka Exploration</title>
         <link>https://my-journal-viewer.vercel.app/</link>
+        <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
         <description>Hidden waterfalls, mountain treks, and cinematic drone footage by Hasitha Gunasekera.</description>
         <language>en-us</language>
         <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
@@ -47,9 +60,8 @@ export default async function handler(req, res) {
       </channel>
     </rss>`;
 
-  // REFINED HEADERS FOR CRAWLERS
+  // 5. Final Header Polish for Pinterest
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate'); 
-  res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8'); 
-  res.setHeader('Access-Control-Allow-Origin', '*'); 
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8'); 
   res.status(200).send(rssFeed.trim());
 }
