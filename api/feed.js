@@ -7,11 +7,10 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // 1. CORS Preflight
+  // CORS Preflight for Vercel
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { data: places, error } = await supabase
@@ -23,7 +22,7 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ error: error.message });
 
   const rssItems = places.map(place => {
-    // 2. DOMAIN MATCHING: Using "view" to match your Pinterest Claim
+    // UPDATED: Using the new 'view' domain to match Pinterest claim
     const rawUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
     const escapedUrl = rawUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
@@ -44,13 +43,9 @@ export default async function handler(req, res) {
   }).join('');
 
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
-    <rss version="2.0" 
-         xmlns:media="http://search.yahoo.com/mrss/" 
-         xmlns:content="http://purl.org/rss/1.0/modules/content/"
-         xmlns:atom="http://www.w3.org/2005/Atom">
+    <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:atom="http://www.w3.org/2005/Atom">
       <channel>
         <title>My Journal | Sri Lanka Exploration</title>
-        {/* 3. CHANNEL LINK: Must match the claimed domain exactly */}
         <link>https://my-journal-view.vercel.app/</link>
         <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
         <description>Hidden waterfalls, mountain treks, and cinematic drone footage by Hasitha Gunasekera.</description>
