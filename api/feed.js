@@ -25,10 +25,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error.message });
   }
 
-  // 2. Construct RSS Items with your specific data structure
+  // 2. Construct RSS Items with escaped URLs for XML compliance
   const rssItems = places.map(place => {
-    // Ensuring the URL matches your deep-linking logic for correct redirects
-    const shareUrl = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
+    // rawUrl matches your deep-linking logic for correct redirects
+    const rawUrl = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
+    
+    // FIX: Escape bare ampersands to &amp; to prevent XML Parsing Errors
+    const escapedUrl = rawUrl.replace(/&/g, '&amp;');
+    const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
     
     // Extract story preview from the ai_article jsonb column
     const description = place.ai_article?.story 
@@ -38,11 +42,11 @@ export default async function handler(req, res) {
     return `
       <item>
         <title><![CDATA[${place.place_name}]]></title>
-        <link>${shareUrl}</link>
+        <link>${escapedUrl}</link>
         <description><![CDATA[${description}]]></description>
         <pubDate>${new Date(place.created_at).toUTCString()}</pubDate>
         <guid isPermaLink="false">my-journal-${place.id}</guid>
-        <media:content url="${place.cover_photo_url}" medium="image" />
+        <media:content url="${escapedMediaUrl}" medium="image" />
       </item>`;
   }).join('');
 
