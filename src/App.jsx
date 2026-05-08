@@ -162,6 +162,7 @@ function App() {
   const [userCoords, setUserCoords] = useState(null);
   const [sortCenter, setSortCenter] = useState(HomePoint);
   const [locationSource, setLocationSource] = useState('device');
+  const [activePinHubId, setActivePinHubId] = useState(null);
 
   // --- Auth & UI States ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -1244,17 +1245,16 @@ function App() {
         loyaltyStatus = "Unique Visit";
       }
 
-      // 2. Enhanced Bot Detection (Filtering Platform Checks & Headless Browsers)
+      // 2. Enhanced Bot Detection (Filtering Platform Checks & Pinterest Crawlers)
       const botPatterns = [
         'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
         'facebookexternalhit', 'twitterbot', 'messenger',
-        'google-safety', 'headless', 'inspect', 'preview'
+        'google-safety', 'headless', 'inspect', 'preview', 'pinterestbot'
       ];
 
-      // Also check for the "HeadlessChrome" pattern or perfectly round versions like .0.0.0
       const isBot = botPatterns.some(pattern => lowerUA.includes(pattern)) ||
         lowerUA.includes('headlesschrome') ||
-        /\.0\.0\.0/.test(ua); // Catches common automation versioning
+        /\.0\.0\.0/.test(ua);
 
       // 3. Device Type
       let type = 'Desktop';
@@ -1269,30 +1269,27 @@ function App() {
       else if (ua.includes('Mac OS')) os = 'macOS';
       else if (ua.includes('Linux')) os = 'Linux';
 
-      // 5. Source Detection (Prioritizing My Journal YouTube Links)
-      let source = "Direct";
+      // 5. Refined Source Detection (Matching logVisit logic)
+      // Priority 1: Use the explicit 'source' column from the database if available
+      let source = v.source || "Direct";
 
-      // Check URL Parameters (Highest Priority for YouTube Incognito)
-      if (v.url) {
-        const urlLower = v.url.toLowerCase();
-        // Captures: ?utm_source=youtube OR YouTube's native 'si=' share parameter
-        if (urlLower.includes('utm_source=youtube') || urlLower.includes('si=')) {
+      // Priority 2: Check stored URL parameters or Referrer if source is still Direct
+      if (source === "Direct") {
+        const urlLower = (v.url || "").toLowerCase();
+        const ref = (v.referrer || "").toLowerCase();
+
+        // Pinterest Identification
+        if (urlLower.includes('utm_source=pinterest') || ref.includes('pinterest') || lowerUA.includes('pinterest')) {
+          source = 'Pinterest';
+        }
+        // YouTube Identification
+        else if (urlLower.includes('utm_source=youtube') || urlLower.includes('si=') || ref.includes('youtube') || ref.includes('youtu.be') || lowerUA.includes('youtube')) {
           source = 'YouTube';
         }
-      }
-
-      // Check User Agent (In-App Browsers)
-      if (source === "Direct") {
-        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
+        // Other Social Fallbacks
+        else if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
         else if (lowerUA.includes('instagram')) source = 'Instagram';
         else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
-        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source = 'YouTube';
-      }
-
-      // Check Referrer (Fallback for standard web redirects)
-      if (source === "Direct" && v.referrer) {
-        const ref = v.referrer.toLowerCase();
-        if (ref.includes('youtube.com') || ref.includes('youtu.be')) source = 'YouTube';
         else if (ref.includes('t.co')) source = 'X (Twitter)';
       }
 
@@ -1303,10 +1300,10 @@ function App() {
     const sortedLatest = [...safeAnalytics].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     const latestRecord = sortedLatest[0];
 
-    // We parse the latest record separately to get its specific Source and Loyalty
+    // Parse metrics for the most recent visitor
     const latestMetrics = latestRecord ? { ...latestRecord, ...parseUA(latestRecord) } : null;
 
-    // Process all data for counters
+    // Process all data for counters (chronological order for knownUsers Set)
     const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const parsedData = sortedData.map(v => ({ ...v, ...parseUA(v) }));
 
@@ -1320,7 +1317,7 @@ function App() {
     };
 
     return {
-      latest: latestMetrics, // Contains country, region, city, type, os, source, loyaltyStatus
+      latest: latestMetrics,
       totalVisits: parsedData.filter(v => v.page_path === 'Main Page').length,
       countries: getSortedMetrics(parsedData, 'country'),
       regions: getSortedMetrics(parsedData, 'region'),
@@ -1683,6 +1680,24 @@ function App() {
                   const dynamicDistance = (L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(p.latitude, p.longitude)) / 1000).toFixed(1);
                   const hasArticle = p.ai_article && Object.keys(p.ai_article).length > 0;
 
+                  const isPinHubOpen = activePinHubId === p.id;
+
+                  const pinIndividualImage = (imageUrl, index) => {
+                    // REFINED: Strictly matching the identification format for logs
+                    const shareUrl = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
+
+                    const descriptions = [
+                      `Discover the untouched beauty of ${p.place_name} in Sri Lanka.`,
+                      `Epic drone perspectives of ${p.place_name}. A true hidden gem.`,
+                      `The misty atmosphere and trekking trails of ${p.locality}.`,
+                      `Exploring ${p.place_name}: A visual field guide by Hasitha Gunasekera.`
+                    ];
+                    const selectedDesc = (descriptions[index % descriptions.length]) + " #TravelSriLanka #MyJournal";
+                    const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(selectedDesc)}`;
+                    window.open(pinterestUrl, '_blank', 'width=750,height=600');
+                    setActivePinHubId(null);
+                  };
+
                   return (
                     <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative hover:shadow-md transition-all">
 
@@ -1695,6 +1710,30 @@ function App() {
                             <Icon name="image" className="w-6 h-6" />
                           </div>
                         )}
+
+                        {isPinHubOpen && (
+                          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-200 p-4">
+                            <p className="text-[8px] font-black text-white uppercase tracking-widest mb-3">Select Image Door</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[p.cover_photo_url, ...(Array.isArray(p.album_photos) ? p.album_photos : []).slice(0, 3)].map((url, i) => url && (
+                                <button
+                                  key={i}
+                                  onClick={() => pinIndividualImage(url, i)}
+                                  className="relative aspect-video rounded-lg overflow-hidden border border-white/20 hover:border-red-500 transition-all hover:scale-105 shadow-xl"
+                                >
+                                  <img src={url} className="w-full h-full object-cover opacity-70 hover:opacity-100" />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-[10px] font-black text-white drop-shadow-md">#{i + 1}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                            <button onClick={() => setActivePinHubId(null)} className="mt-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+
                         <button onClick={() => deleteLocation(p.id, p.place_name)} className="absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-sm transition-all opacity-0 group-hover:opacity-100">
                           <Icon name="trash-2" className="w-3.5 h-3.5" />
                         </button>
@@ -1720,34 +1759,9 @@ function App() {
                         <select value={p.category} onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)} className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-indigo-100 transition-colors">
                           {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                         </select>
-                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-50">
-                          <div className="flex items-center gap-2">
-                            <Icon name="shield" className="w-2.5 h-2.5 text-rose-400" />
-                            <select value={p.restriction_level || 'None'} onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-rose-600 bg-rose-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-rose-100">
-                              <option value="None">Public / No Restriction</option>
-                              <option value="Low">Low / General Rules</option>
-                              <option value="High">High / Permit Required</option>
-                              <option value="Restricted">Restricted / No Entry</option>
-                            </select>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Icon name="landmark" className="w-2.5 h-2.5 text-emerald-400" />
-                            <select value={p.governing_org || 'Open'} onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100">
-                              <option value="Open">No Governing Authority</option>
-                              <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
-                              <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
-                              <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
-                              <option value="Coast Conservation Dept">Coastal Resource Management Dept.</option>
-                              <option value="Department of Archaeology">Dept. of Archaeology</option>
-                              <option value="Department of National Botanic Gardens">National Botanic Gardens</option>
-                              <option value="National Livestock Development Board">NLDB</option>
-                              <option value="Local Authorities">Local Authorities (PS)</option>
-                            </select>
-                          </div>
-                        </div>
                       </div>
 
-                      {/* Footer Actions - Centered and Minimal Map Button */}
+                      {/* Footer Actions */}
                       <div className="p-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-center gap-2">
                         <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo">
                           <Icon name="camera" className="w-3.5 h-3.5" />
@@ -1770,13 +1784,24 @@ function App() {
                           <Icon name="layout-grid" className="w-3.5 h-3.5" />
                         </button>
 
+                        {/* MAIN PINTEREST BUTTON (Conditional Hub) */}
+                        {p.status === 'done' && (
+                          <button
+                            onClick={() => setActivePinHubId(isPinHubOpen ? null : p.id)}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${isPinHubOpen ? 'bg-red-600 text-white' : 'bg-red-50 text-[#E60023] hover:bg-red-100'}`}
+                            title="Pinterest Hub"
+                          >
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                              <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.966 1.406-5.966s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.261 7.929-7.261 4.162 0 7.397 2.966 7.397 6.93 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.033-1.002 2.324-1.492 3.121 1.12.345 2.3.533 3.524.533 6.621 0 11.988-5.367 11.988-11.987C24.005 5.367 18.638 0 12.017 0z" />
+                            </svg>
+                          </button>
+                        )}
+
                         <button onClick={() => {
                           const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
                           const newVal = prompt("Enter TikTok URLs:", current);
                           if (newVal !== null) {
-                            const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
-                            const extractedLinks = newVal.match(tiktokRegex);
-                            const videoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+                            const videoArray = newVal.split(',').map(s => s.trim()).filter(s => s !== "");
                             updatePlaceField(p.id, 'tiktok_urls', videoArray);
                           }
                         }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls?.length > 0 ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Videos">
@@ -1786,29 +1811,9 @@ function App() {
                         <button
                           onClick={() => hasArticle ? manualEditArticle(p) : generateTravelArticle(p)}
                           className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'}`}
-                          title={hasArticle ? "Edit Article" : "Generate with AI"}
                         >
                           <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
                         </button>
-
-                        {hasArticle && (
-                          <button
-                            onClick={() => window.confirm(`Delete AI article for ${p.place_name}?`) && updatePlaceField(p.id, 'ai_article', {})}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition-colors"
-                          >
-                            <Icon name="file-x" className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        <a
-                          href={p.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 text-blue-600 transition-colors"
-                          title="Open in Maps"
-                        >
-                          <MapPinned className="w-3.5 h-3.5" />
-                        </a>
                       </div>
                     </div>
                   );
