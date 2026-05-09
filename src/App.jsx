@@ -1683,7 +1683,7 @@ function App() {
                     // 2. Hardware-Neutral & Protected Descriptions
                     // Focusing on perspective and storytelling rather than devices
                     const descriptions = [
-                      `A breathtaking bird's-eye view of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
+                      `A breathtaking view of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
                       `Experience the raw beauty and scale of ${p.place_name}. A visual story from My Journal.`,
                       `Uncovering the unique landscapes of ${p.place_name}. Every frame tells a story of adventure.`,
                       `Cinematic highlights from ${p.place_name}. Documenting the untouched corners of the island.`
