@@ -7,14 +7,14 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // 1. CORS Preflight & Security Allowlist (Bypasses Vercel Deployment Protection)
+  // 1. CORS & Security (Allows Pinterest/RSS readers to fetch data)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 2. Data Fetching: Filters for 'done' status to ensure Pins have photos/stories
+  // 2. Data Fetching: Retrieve completed trips
   const { data: places, error } = await supabase
     .from('travel_bucket_list') 
     .select(`id, place_name, created_at, cover_photo_url, ai_article, status`)
@@ -24,48 +24,56 @@ export default async function handler(req, res) {
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // 3. Construct RSS Items using the Claimed 'view' domain
+  // 3. Construct RSS Items with Attribution Protection
   const rssItems = places.map(place => {
-    // UTM source added for tracking in your custom logVisit dashboard logic
-    const rawUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
+    // Correct live domain: my-journal-view.vercel.app
+    const rawUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=pinterest`;
     
-    // XML Safety: Escaping ampersands to prevent "not well-formed" errors
+    // Safety: Escape XML characters
     const escapedUrl = rawUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
     
-    const description = place.ai_article?.story 
-      ? place.ai_article.story.substring(0, 450).trim() + "..." 
+    // Add visual copyright text to the description that Pinterest scrapes
+    const storyText = place.ai_article?.story 
+      ? place.ai_article.story.substring(0, 400).trim() + "..." 
       : "Explore this hidden gem in Sri Lanka.";
+    
+    const protectedDescription = `${storyText} \n\n© My Journal | hasitha-gunasekera. Original photography available only at my-journal-view.vercel.app`;
     
     return `
       <item>
         <title><![CDATA[${place.place_name}]]></title>
         <link>${escapedUrl}</link>
-        <description><![CDATA[${description}]]></description>
+        <description><![CDATA[${protectedDescription}]]></description>
         <pubDate>${new Date(place.created_at).toUTCString()}</pubDate>
+        
         <guid isPermaLink="true">${escapedUrl}</guid>
-        <media:content url="${escapedMediaUrl}" medium="image" />
+        
+        <media:content url="${escapedMediaUrl}" medium="image">
+           <media:credit role="photographer">Hasitha Gunasekera</media:credit>
+           <media:copyright>My Journal | Sri Lanka</media:copyright>
+        </media:content>
       </item>`;
   }).join('');
 
-  // 4. Construct the Full RSS XML with Atom 'self' reference
+  // 4. Construct the Full RSS XML
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
     <rss version="2.0" 
          xmlns:media="http://search.yahoo.com/mrss/" 
          xmlns:content="http://purl.org/rss/1.0/modules/content/"
          xmlns:atom="http://www.w3.org/2005/Atom">
       <channel>
-        <title>My Journal | Sri Lanka Exploration</title>
+        <title>My Journal | Sri Lanka Travel Gallery</title>
         <link>https://my-journal-view.vercel.app/</link>
-        <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
-        <description>Hidden waterfalls, mountain treks, and cinematic drone footage by Hasitha Gunasekera.</description>
+        <atom:link href="https://my-journal-view.vercel.app/api/feed" rel="self" type="application/rss+xml" />
+        <description>Official cinematic drone and iPhone photography by Hasitha Gunasekera.</description>
         <language>en-us</language>
         <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
         ${rssItems}
       </channel>
     </rss>`;
 
-  // 5. Optimized Headers for Pinterest Crawler
+  // 5. Headers & Delivery
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate'); 
   res.setHeader('Content-Type', 'application/xml; charset=utf-8'); 
   res.status(200).send(rssFeed.trim());
