@@ -2041,22 +2041,33 @@ function App() {
               <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
                 <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
 
-                <div className="flex justify-between items-end mb-10 relative z-10">
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
-                    <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
-                  </div>
-                  <div className="text-right flex flex-col items-end">
-                    <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
-                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                      <span className="text-emerald-400 font-black italic text-sm">
-                        {dashboardStats.totalVisits > 0 ? Math.round(((dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0) / dashboardStats.totalVisits) * 100) : 0}%
-                      </span>
-                      <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
-                    </div>
-                  </div>
-                </div>
+                {/* Consolidated Header with Intelligence & Verification Logic */}
+                {(() => {
+                  const realCount = dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0;
+                  const verifiedPercentage = dashboardStats.totalVisits > 0
+                    ? Math.min(Math.round((realCount / dashboardStats.totalVisits) * 100), 100)
+                    : 0;
 
+                  return (
+                    <div className="flex justify-between items-end mb-10 relative z-10">
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
+                        <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
+                      </div>
+                      <div className="text-right flex flex-col items-end">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
+                        <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                          <span className="text-emerald-400 font-black italic text-sm">
+                            {verifiedPercentage}%
+                          </span>
+                          <span className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">Verified Person</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Metrics Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-10 relative z-10">
                   <MetricColumn title="Countries" data={dashboardStats.countries} highlightValue={dashboardStats.latest?.country} />
                   <MetricColumn title="Regions" data={dashboardStats.regions} highlightValue={dashboardStats.latest?.region} />
@@ -2067,6 +2078,7 @@ function App() {
                   <MetricColumn title="Visit Loyalty" data={dashboardStats.loyalty} highlightValue={dashboardStats.latest?.loyaltyStatus} />
                   <MetricColumn title="Visit History" data={dashboardStats.pageHistory} highlight />
 
+                  {/* Traffic Type Breakdown */}
                   <div>
                     <p className="text-[9px] font-black uppercase text-slate-500 mb-3 border-b border-slate-700 pb-1 tracking-wider">Traffic Type</p>
                     <div className="space-y-2">
