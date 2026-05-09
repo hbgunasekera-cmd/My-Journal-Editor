@@ -1255,7 +1255,7 @@ function App() {
       // 3. Enhanced Bot Detection
       const botPatterns = [
         'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
-        'facebookexternalhit', 'twitterbot', 'google-safety', 
+        'facebookexternalhit', 'twitterbot', 'google-safety',
         'headless', 'inspect', 'preview', 'pinterestbot'
       ];
 
@@ -1296,7 +1296,7 @@ function App() {
     // IDENTIFY LATEST VISIT: Use already parsed data for consistency
     const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const parsedData = sortedData.map(v => ({ ...v, ...parseUA(v) }));
-    
+
     // Get the most recent record from the parsed list
     const latestMetrics = [...parsedData].reverse()[0] || null;
 
@@ -1676,19 +1676,32 @@ function App() {
                   const isPinHubOpen = activePinHubId === p.id;
 
                   const pinIndividualImage = (imageUrl, index) => {
-                    // REFINED: Strictly matching the identification format for logs
-                    const shareUrl = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
+                    // 1. Correct Domain: my-journal-view.vercel.app
+                    // UTM source set to 'pinterest' to track traffic from individual image pins
+                    const shareUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
 
+                    // 2. Dynamic, Protected Descriptions
+                    // Rotating descriptions to prevent Pinterest from flagging posts as spam/duplicates
                     const descriptions = [
-                      `Discover the untouched beauty of ${p.place_name} in Sri Lanka.`,
-                      `Epic drone perspectives of ${p.place_name}. A true hidden gem.`,
-                      `The misty atmosphere and trekking trails of ${p.locality}.`,
-                      `Exploring ${p.place_name}: A visual field guide by Hasitha Gunasekera.`
+                      `Discover the untouched beauty of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
+                      `Epic drone perspective of ${p.place_name}. A true hidden gem captured by My Journal.`,
+                      `The misty atmosphere and trekking trails of ${p.locality || 'Sri Lanka'}. Photography by Hasitha Gunasekera.`,
+                      `Exploring ${p.place_name}: A visual field guide. View the full 4K gallery on My Journal.`
                     ];
-                    const selectedDesc = (descriptions[index % descriptions.length]) + " #TravelSriLanka #MyJournal";
+
+                    // 3. Construct the Final Description with Hashtags
+                    const selectedDesc = `${descriptions[index % descriptions.length]} #TravelSriLanka #MyJournal #ExploreSriLanka`;
+
+                    // 4. Pinterest Share URL Construction
                     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(selectedDesc)}`;
-                    window.open(pinterestUrl, '_blank', 'width=750,height=600');
-                    setActivePinHubId(null);
+
+                    // 5. Execution and State Reset
+                    window.open(pinterestUrl, '_blank', 'width=750,height=600,scrollbars=yes,resizable=yes');
+
+                    // Close the active pin menu/hub if using one
+                    if (typeof setActivePinHubId === 'function') {
+                      setActivePinHubId(null);
+                    }
                   };
 
                   return (
