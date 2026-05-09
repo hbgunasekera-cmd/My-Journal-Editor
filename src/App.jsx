@@ -2041,18 +2041,23 @@ function App() {
               <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden lg:col-span-2">
                 <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
 
-                {/* Consolidated Header with Intelligence & Verification Logic */}
+                {/* Header Logic: Deriving totals from breakdown to ensure sync */}
                 {(() => {
-                  const realCount = dashboardStats.trafficType.find(t => t[0] === 'Real Person')?.[1] || 0;
-                  const verifiedPercentage = dashboardStats.totalVisits > 0
-                    ? Math.min(Math.round((realCount / dashboardStats.totalVisits) * 100), 100)
+                  const trafficEntries = dashboardStats.trafficType || [];
+                  const realCount = trafficEntries.find(t => t[0] === 'Real Person')?.[1] || 0;
+
+                  // Summing all types ensures the total matches the breakdown exactly
+                  const calculatedTotal = trafficEntries.reduce((acc, [_, count]) => acc + count, 0);
+
+                  const verifiedPercentage = calculatedTotal > 0
+                    ? Math.min(Math.round((realCount / calculatedTotal) * 100), 100)
                     : 0;
 
                   return (
                     <div className="flex justify-between items-end mb-10 relative z-10">
                       <div>
                         <p className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-widest">Traffic Intelligence</p>
-                        <p className="text-6xl font-black italic tracking-tighter">{dashboardStats.totalVisits}</p>
+                        <p className="text-6xl font-black italic tracking-tighter">{calculatedTotal}</p>
                       </div>
                       <div className="text-right flex flex-col items-end">
                         <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Human Verification</p>
