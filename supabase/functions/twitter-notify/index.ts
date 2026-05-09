@@ -5,7 +5,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 const CLIENT_ID = Deno.env.get("X_CLIENT_ID");
 const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
 
-// Tokens will be automatically managed by the refresh logic
+// Tokens managed by refresh logic
 let ACCESS_TOKEN = "MHBUdUs2ODVfMWljSk9Rbm5XS0ZpYS1wZTJPRkIyd0hOOE10RnZyV2RNTG40OjE3NzgyODAzODQxNjU6MToxOmF0OjE";
 const REFRESH_TOKEN = "a29iaC1XV3k4OEQtZ1JMdl9yaGVTSmRiY0ZIM3lsOVV1aU9DcXlFVHFSdERDOjE3NzgyODAzODQxNjU6MTowOnJ0OjE";
 
@@ -24,9 +24,9 @@ serve(async (req: Request): Promise<Response> => {
       return new Response("Skipped", { status: 200 });
     }
 
-    // 3. Shortened Message (Fits 280-character limit)
+    // 3. Shortened Message with CORRECT Domain: my-journal-view.vercel.app
     const place = record.place_name;
-    const url = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(place)}`;
+    const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place)}`;
     const message = `New Adventure: ${place} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
 
     // 4. Posting Function Helper
@@ -44,7 +44,7 @@ serve(async (req: Request): Promise<Response> => {
     console.log("Attempting to post to X...");
     let response = await postTweet(ACCESS_TOKEN);
 
-    // 5. OAuth 2.0 Refresh Logic (If Access Token expired)
+    // 5. OAuth 2.0 Refresh Logic
     if (response.status === 401) {
       console.log("Token expired. Refreshing...");
       const refreshResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
