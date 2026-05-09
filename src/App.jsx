@@ -1677,28 +1677,30 @@ function App() {
 
                   const pinIndividualImage = (imageUrl, index) => {
                     // 1. Correct Domain: my-journal-view.vercel.app
-                    // UTM source set to 'pinterest' to track traffic from individual image pins
+                    // UTM source ensures you can track these hits in your visits dashboard
                     const shareUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
 
-                    // 2. Dynamic, Protected Descriptions
-                    // Rotating descriptions to prevent Pinterest from flagging posts as spam/duplicates
+                    // 2. Hardware-Neutral & Protected Descriptions
+                    // Focusing on perspective and storytelling rather than devices
                     const descriptions = [
-                      `Discover the untouched beauty of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
-                      `Epic drone perspective of ${p.place_name}. A true hidden gem captured by My Journal.`,
-                      `The misty atmosphere and trekking trails of ${p.locality || 'Sri Lanka'}. Photography by Hasitha Gunasekera.`,
-                      `Exploring ${p.place_name}: A visual field guide. View the full 4K gallery on My Journal.`
+                      `A breathtaking bird's-eye view of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
+                      `Experience the raw beauty and scale of ${p.place_name}. A visual story from My Journal.`,
+                      `Uncovering the unique landscapes of ${p.place_name}. Every frame tells a story of adventure.`,
+                      `Cinematic highlights from ${p.place_name}. Documenting the untouched corners of the island.`
                     ];
 
-                    // 3. Construct the Final Description with Hashtags
+                    // 3. Construct the Final Description with Attribution and Hashtags
+                    // Rotates descriptions based on image index to avoid duplicate content flags
                     const selectedDesc = `${descriptions[index % descriptions.length]} #TravelSriLanka #MyJournal #ExploreSriLanka`;
 
                     // 4. Pinterest Share URL Construction
+                    // 'media' is the Google Photos URL; 'url' is the link back to your adventure page
                     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(selectedDesc)}`;
 
-                    // 5. Execution and State Reset
+                    // 5. Window Execution and State Management
                     window.open(pinterestUrl, '_blank', 'width=750,height=600,scrollbars=yes,resizable=yes');
 
-                    // Close the active pin menu/hub if using one
+                    // Safely reset the UI state if the function exists
                     if (typeof setActivePinHubId === 'function') {
                       setActivePinHubId(null);
                     }
