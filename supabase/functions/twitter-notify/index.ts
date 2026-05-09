@@ -1,27 +1,31 @@
 // supabase/functions/twitter-notify/index.ts
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
-// 1. Pull Credentials from Supabase Secrets
+// 1. Environment Variables (Set these via 'supabase secrets set')
 const CLIENT_ID = Deno.env.get("X_CLIENT_ID");
 const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
 
-// Note: Using Refresh Token logic to handle short-lived Access Tokens
+// Temporary tokens - Refresh logic will handle updates
 let ACCESS_TOKEN = "MHBUdUs2ODVfMWljSk9Rbm5XS0ZpYS1wZTJPRkIyd0hOOE10RnZyV2RNTG40OjE3NzgyODAzODQxNjU6MToxOmF0OjE";
 const REFRESH_TOKEN = "a29iaC1XV3k4OEQtZ1JMdl9yaGVTSmRiY0ZIM3lsOVV1aU9DcXlFVHFSdERDOjE3NzgyODAzODQxNjU6MTowOnJ0OjE";
 
 serve(async (req: Request): Promise<Response> => {
   try {
-    const { record, old_record } = await req.json();
+    const payload = await req.json();
+    const { record, old_record } = payload;
 
-    // 2. Trigger Logic: Only fire when a location is marked as 'done'
+    console.log(`Processing update for: ${record.place_name}`);
+
+    // 2. Trigger Logic: Ensure it's a NEW 'done' status
     if (record.status !== 'done' || old_record?.status === 'done') {
-      return new Response("Update ignored: Status is not transitioning to 'done'", { status: 200 });
+      console.log("Trigger skipped: Status is not transitioning to 'done'.");
+      return new Response("No update needed", { status: 200 });
     }
 
-    // 3. Craft the X (Twitter) Message
-    const message = `New Adventure Added: ${record.place_name} 🏔️\n\nExplore the full iPhone & Drone gallery here:\nhttps://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}\n\n#SriLanka #Travel #DronePhotography`;
+    // 3. Craft the Message
+    const message = `New Adventure Added: ${record.place_name} 🏔️\n\nCheck out the full iPhone & Drone gallery here:\nhttps://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}\n\n#SriLanka #Travel #DronePhotography`;
 
-    // 4. Posting Function Helper
+    // 4. Helper for X API
     const postTweet = async (token: string): Promise<Response> => {
       return await fetch("https://api.twitter.com/2/tweets", {
         method: "POST",
@@ -33,9 +37,10 @@ serve(async (req: Request): Promise<Response> => {
       });
     };
 
+    console.log("Attempting to post tweet...");
     let response = await postTweet(ACCESS_TOKEN);
 
-    // 5. OAuth 2.0 Refresh Logic (If Access Token has expired)
+    // 5. OAuth 2.0 Refresh Logic
     if (response.status === 401) {
       console.log("Access Token expired, attempting refresh...");
       
@@ -54,23 +59,24 @@ serve(async (req: Request): Promise<Response> => {
 
       if (refreshResponse.ok) {
         const newData = await refreshResponse.json();
-        // Retry the post with the brand new access token
+        console.log("Token refreshed. Retrying post...");
         response = await postTweet(newData.access_token);
-        console.log("Tweet posted successfully after token refresh.");
       } else {
-        const errorData = await refreshResponse.json();
-        throw new Error(`Token refresh failed: ${JSON.stringify(errorData)}`);
+        const errorDetails = await refreshResponse.text();
+        throw new Error(`Token refresh failed: ${errorDetails}`);
       }
     }
 
     const result = await response.json();
+    console.log("X API Response:", JSON.stringify(result));
+
     return new Response(JSON.stringify(result), { 
       status: response.status,
       headers: { "Content-Type": "application/json" } 
     });
 
   } catch (error: any) {
-    console.error("Function Error:", error.message);
+    console.error("Critical Function Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), { 
       status: 500, 
       headers: { "Content-Type": "application/json" } 
