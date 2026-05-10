@@ -490,15 +490,24 @@ function App() {
     setFilteredPlaces(filtered);
   }, [searchTerm, places]);
 
-  useEffect(() => {
-    if (filteredPlaces.length > 0 && searchTerm.length > 2 && mapRef.current) {
-      const firstMatch = filteredPlaces[0];
-      mapRef.current.flyTo([firstMatch.latitude, firstMatch.longitude], 12, {
+
+useEffect(() => {
+  if (filteredPlaces.length > 0 && searchTerm.length > 2 && mapRef.current) {
+    const firstMatch = filteredPlaces[0];
+    
+    // Parse coordinates to ensure they are numbers
+    const lat = parseFloat(firstMatch.latitude);
+    const lng = parseFloat(firstMatch.longitude);
+
+    // Only fly if coordinates are valid numbers
+    if (!isNaN(lat) && !isNaN(lng)) {
+      mapRef.current.flyTo([lat, lng], 12, {
         animate: true,
         duration: 1.5
       });
     }
-  }, [filteredPlaces, searchTerm]);
+  }
+}, [filteredPlaces, searchTerm]);
 
 
   const triggerToast = (msg) => {
@@ -659,14 +668,24 @@ function App() {
     // 2. Sorting Logic 
     return [...filtered].sort((a, b) => {
       if (sortBy === 'distance') {
-        const distA = L.latLng(sortCenter.lat, sortCenter.lng)
-          .distanceTo(L.latLng(a.latitude, a.longitude));
-        const distB = L.latLng(sortCenter.lat, sortCenter.lng)
-          .distanceTo(L.latLng(b.latitude, b.longitude));
+        // Safe check for 'a' coordinates
+        const latA = parseFloat(a.latitude);
+        const lngA = parseFloat(a.longitude);
+        const distA = (!isNaN(latA) && !isNaN(lngA)) 
+          ? L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(latA, lngA)) 
+          : Infinity; // Push invalid locations to the bottom
+
+        // Safe check for 'b' coordinates
+        const latB = parseFloat(b.latitude);
+        const lngB = parseFloat(b.longitude);
+        const distB = (!isNaN(latB) && !isNaN(lngB)) 
+          ? L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(latB, lngB)) 
+          : Infinity; // Push invalid locations to the bottom
+
         return distA - distB;
       }
 
-
+      // Default sort (Newest First)
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
 
@@ -1609,252 +1628,252 @@ function App() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 overflow-hidden relative">
 
-      {/* TAB 1: PLACES */}
-{activeTab === 'places' && (
-  <div className="h-full flex flex-col">
-    {/* Filters & Control Header */}
-    <div className="px-8 py-4 bg-white border-b border-slate-100 flex flex-wrap items-center gap-4 shrink-0">
-      <div className="relative">
-        <input
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search Location"
-          className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none focus:border-indigo-400 transition-all w-48"
-        />
-      </div>
-
-      <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
-        <option value="All">All Categories</option>
-        {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-      </select>
-
-      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
-        <option value="All">All Status</option>
-        <option value="pending">Pending</option>
-        <option value="done">Completed</option>
-      </select>
-
-      <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
-
-      <select
-        value={sortBy}
-        onChange={(e) => setSortBy(e.target.value)}
-        className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100"
-      >
-        <option value="newest">Newest First</option>
-        <option value="distance">Nearest First</option>
-      </select>
-
-      <button
-        onClick={() => setLocationSource(prev => prev === 'device' ? 'home' : 'device')}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${locationSource === 'device'
-          ? 'bg-blue-50 border-blue-200 text-blue-600'
-          : 'bg-amber-50 border-amber-200 text-amber-600'
-          }`}
-      >
-        <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3.5 h-3.5" />
-        {locationSource === 'device' ? 'Live GPS' : 'Home'}
-      </button>
-
-      <div className="flex gap-2">
-        <button onClick={bulkGenerateArticles} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100 active:scale-95">
-          <Icon name="sparkles" className="w-3.5 h-3.5" /> Articles
-        </button>
-        <button onClick={bulkUpdateMetadata} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 active:scale-95">
-          <Icon name="shield-check" className="w-3.5 h-3.5" /> Audit Meta
-        </button>
-      </div>
-    </div>
-
-    {/* Places Grid */}
-    <div className="flex-1 overflow-y-auto p-8 no-scrollbar bg-slate-50/50">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        {(processedPlaces || []).map(p => {
-          const dynamicDistance = (L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(p.latitude, p.longitude)) / 1000).toFixed(1);
-          const hasArticle = p.ai_article && Object.keys(p.ai_article).length > 0;
-          const isPinHubOpen = activePinHubId === p.id;
-
-          const pinIndividualImage = (imageUrl, index) => {
-            const shareUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
-            const descriptions = [
-              `A breathtaking view of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
-              `Experience the raw beauty and scale of ${p.place_name}. A visual story from My Journal.`,
-              `Uncovering the unique landscapes of ${p.place_name}. Every frame tells a story of adventure.`,
-              `Cinematic highlights from ${p.place_name}. Documenting the untouched corners of the island.`
-            ];
-            const selectedDesc = `${descriptions[index % descriptions.length]} #TravelSriLanka #MyJournal #ExploreSriLanka`;
-            const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(selectedDesc)}`;
-            
-            window.open(pinterestUrl, '_blank', 'width=750,height=600,scrollbars=yes,resizable=yes');
-            if (typeof setActivePinHubId === 'function') setActivePinHubId(null);
-          };
-
-          return (
-            <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative hover:shadow-md transition-all">
-
-              {/* Image Cover Section */}
-              <div className="aspect-video bg-slate-200 relative shrink-0 overflow-hidden">
-                {p.cover_photo_url ? (
-                  <img src={p.cover_photo_url} alt="Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-400">
-                    <Icon name="image" className="w-6 h-6" />
-                  </div>
-                )}
-
-                {/* Pinterest Hub Overlay */}
-                {isPinHubOpen && (
-                  <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-200 p-4">
-                    <p className="text-[8px] font-black text-white uppercase tracking-widest mb-3">Select Image Door</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[p.cover_photo_url, ...(Array.isArray(p.album_photos) ? p.album_photos : []).slice(0, 3)].map((url, i) => url && (
-                        <button
-                          key={i}
-                          onClick={() => pinIndividualImage(url, i)}
-                          className="relative aspect-video rounded-lg overflow-hidden border border-white/20 hover:border-red-500 transition-all hover:scale-105 shadow-xl"
-                        >
-                          <img src={url} className="w-full h-full object-cover opacity-70 hover:opacity-100" />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[10px] font-black text-white drop-shadow-md">#{i + 1}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <button onClick={() => setActivePinHubId(null)} className="mt-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full">
-                      <Icon name="x" className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                <button onClick={() => deleteLocation(p.id, p.place_name)} className="absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-sm transition-all opacity-0 group-hover:opacity-100 z-10">
-                  <Icon name="trash-2" className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 z-10 ${p.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white/90 text-orange-500'}`}>
-                  <div className="flex items-center gap-1">
-                    <Icon name={p.status === 'done' ? 'check-circle' : 'circle'} className="w-2.5 h-2.5" /> {p.status}
-                  </div>
-                </button>
+        {/* TAB 1: PLACES */}
+        {activeTab === 'places' && (
+          <div className="h-full flex flex-col">
+            {/* Filters & Control Header */}
+            <div className="px-8 py-4 bg-white border-b border-slate-100 flex flex-wrap items-center gap-4 shrink-0">
+              <div className="relative">
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search Location"
+                  className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none focus:border-indigo-400 transition-all w-48"
+                />
               </div>
 
-              {/* Body Details */}
-              <div className="p-4 flex-1 flex flex-col gap-2">
-                <input type="text" defaultValue={p.place_name} onBlur={(e) => updatePlaceField(p.id, 'place_name', e.target.value.trim())} className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full" />
-                <div className="flex flex-col gap-1 px-1">
-                  <div className="flex items-center gap-1 -ml-1">
-                    <Icon name="map-pin" className="w-3 h-3 text-slate-400" />
-                    <input type="text" defaultValue={p.locality || ''} placeholder="Unknown Locality" onBlur={(e) => updatePlaceField(p.id, 'locality', e.target.value)} className="text-[9px] font-bold text-slate-400 uppercase bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full truncate" />
-                  </div>
-                  <p className={`text-[9px] font-black uppercase flex items-center gap-1 ${locationSource === 'device' ? 'text-blue-500' : 'text-amber-600'}`}>
-                    <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3 h-3" /> {dynamicDistance} KM
-                  </p>
-                </div>
-                <select value={p.category} onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)} className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-indigo-100 transition-colors">
-                  {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
+                <option value="All">All Categories</option>
+                {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
 
-                {/* Metadata Selectors */}
-                <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-50">
-                  <div className="flex items-center gap-2">
-                    <Icon name="shield" className="w-2.5 h-2.5 text-rose-400" />
-                    <select value={p.restriction_level || 'None'} onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-rose-600 bg-rose-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-rose-100">
-                      <option value="None">Public / No Restriction</option>
-                      <option value="Low">Low / General Rules</option>
-                      <option value="High">High / Permit Required</option>
-                      <option value="Restricted">Restricted / No Entry</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Icon name="landmark" className="w-2.5 h-2.5 text-emerald-400" />
-                    <select value={p.governing_org || 'Open'} onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100">
-                      <option value="Open">No Governing Authority</option>
-                      <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
-                      <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
-                      <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
-                      <option value="Coast Conservation Dept">Coastal Resource Management Dept.</option>
-                      <option value="Department of Archaeology">Dept. of Archaeology</option>
-                      <option value="Department of National Botanic Gardens">National Botanic Gardens</option>
-                      <option value="National Livestock Development Board">NLDB</option>
-                      <option value="Local Authorities">Local Authorities (PS)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
+                <option value="All">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="done">Completed</option>
+              </select>
 
-              {/* Footer Actions */}
-              <div className="p-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-center gap-2">
-                <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo">
-                  <Icon name="camera" className="w-3.5 h-3.5" />
+              <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100"
+              >
+                <option value="newest">Newest First</option>
+                <option value="distance">Nearest First</option>
+              </select>
+
+              <button
+                onClick={() => setLocationSource(prev => prev === 'device' ? 'home' : 'device')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${locationSource === 'device'
+                  ? 'bg-blue-50 border-blue-200 text-blue-600'
+                  : 'bg-amber-50 border-amber-200 text-amber-600'
+                  }`}
+              >
+                <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3.5 h-3.5" />
+                {locationSource === 'device' ? 'Live GPS' : 'Home'}
+              </button>
+
+              <div className="flex gap-2">
+                <button onClick={bulkGenerateArticles} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100 active:scale-95">
+                  <Icon name="sparkles" className="w-3.5 h-3.5" /> Articles
                 </button>
-
-                <button
-                  onClick={() => {
-                    const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
-                    const newVal = prompt("Enter Image URLs:", current);
-                    if (newVal !== null) {
-                      const regex = /https:\/\/lh3\.googleusercontent\.com\/pw\/[^"'\s<>]+/g;
-                      const extractedLinks = newVal.match(regex);
-                      const photoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
-                      updatePlaceField(p.id, 'album_photos', photoArray);
-                    }
-                  }}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
-                  title="Manage Gallery"
-                >
-                  <Icon name="layout-grid" className="w-3.5 h-3.5" />
+                <button onClick={bulkUpdateMetadata} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 active:scale-95">
+                  <Icon name="shield-check" className="w-3.5 h-3.5" /> Audit Meta
                 </button>
-
-                {/* Pinterest Hub Button */}
-                {p.status === 'done' && (
-                  <button
-                    onClick={() => setActivePinHubId(isPinHubOpen ? null : p.id)}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${isPinHubOpen ? 'bg-red-600 text-white' : 'bg-red-50 text-[#E60023] hover:bg-red-100'}`}
-                    title="Pinterest Hub"
-                  >
-                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                      <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.966 1.406-5.966s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.261 7.929-7.261 4.162 0 7.397 2.966 7.397 6.93 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.033-1.002 2.324-1.492 3.121 1.12.345 2.3.533 3.524.533 6.621 0 11.988-5.367 11.988-11.987C24.005 5.367 18.638 0 12.017 0z" />
-                    </svg>
-                  </button>
-                )}
-
-                <button onClick={() => {
-                  const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
-                  const newVal = prompt("Enter TikTok URLs:", current);
-                  if (newVal !== null) {
-                    const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
-                    const extractedLinks = newVal.match(tiktokRegex);
-                    const videoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
-                    updatePlaceField(p.id, 'tiktok_urls', videoArray);
-                  }
-                }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls?.length > 0 ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Videos">
-                  <Icon name="video" className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={() => hasArticle ? manualEditArticle(p) : generateTravelArticle(p)}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'}`}
-                  title={hasArticle ? "Edit Article" : "Generate with AI"}
-                >
-                  <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Delete AI Article */}
-                {hasArticle && (
-                  <button
-                    onClick={() => window.confirm(`Delete AI article for ${p.place_name}?`) && updatePlaceField(p.id, 'ai_article', {})}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition-colors"
-                    title="Delete AI Article"
-                  >
-                    <Icon name="file-x" className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-)}
+
+            {/* Places Grid */}
+            <div className="flex-1 overflow-y-auto p-8 no-scrollbar bg-slate-50/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                {(processedPlaces || []).map(p => {
+                  const dynamicDistance = (L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(p.latitude, p.longitude)) / 1000).toFixed(1);
+                  const hasArticle = p.ai_article && Object.keys(p.ai_article).length > 0;
+                  const isPinHubOpen = activePinHubId === p.id;
+
+                  const pinIndividualImage = (imageUrl, index) => {
+                    const shareUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
+                    const descriptions = [
+                      `A breathtaking view of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
+                      `Experience the raw beauty and scale of ${p.place_name}. A visual story from My Journal.`,
+                      `Uncovering the unique landscapes of ${p.place_name}. Every frame tells a story of adventure.`,
+                      `Cinematic highlights from ${p.place_name}. Documenting the untouched corners of the island.`
+                    ];
+                    const selectedDesc = `${descriptions[index % descriptions.length]} #TravelSriLanka #MyJournal #ExploreSriLanka`;
+                    const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(selectedDesc)}`;
+
+                    window.open(pinterestUrl, '_blank', 'width=750,height=600,scrollbars=yes,resizable=yes');
+                    if (typeof setActivePinHubId === 'function') setActivePinHubId(null);
+                  };
+
+                  return (
+                    <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative hover:shadow-md transition-all">
+
+                      {/* Image Cover Section */}
+                      <div className="aspect-video bg-slate-200 relative shrink-0 overflow-hidden">
+                        {p.cover_photo_url ? (
+                          <img src={p.cover_photo_url} alt="Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-400">
+                            <Icon name="image" className="w-6 h-6" />
+                          </div>
+                        )}
+
+                        {/* Pinterest Hub Overlay */}
+                        {isPinHubOpen && (
+                          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-200 p-4">
+                            <p className="text-[8px] font-black text-white uppercase tracking-widest mb-3">Select Image Door</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[p.cover_photo_url, ...(Array.isArray(p.album_photos) ? p.album_photos : []).slice(0, 3)].map((url, i) => url && (
+                                <button
+                                  key={i}
+                                  onClick={() => pinIndividualImage(url, i)}
+                                  className="relative aspect-video rounded-lg overflow-hidden border border-white/20 hover:border-red-500 transition-all hover:scale-105 shadow-xl"
+                                >
+                                  <img src={url} className="w-full h-full object-cover opacity-70 hover:opacity-100" />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-[10px] font-black text-white drop-shadow-md">#{i + 1}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                            <button onClick={() => setActivePinHubId(null)} className="mt-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full">
+                              <Icon name="x" className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+
+                        <button onClick={() => deleteLocation(p.id, p.place_name)} className="absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg shadow-sm transition-all opacity-0 group-hover:opacity-100 z-10">
+                          <Icon name="trash-2" className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => updatePlaceField(p.id, 'status', p.status === 'done' ? 'pending' : 'done')} className={`absolute top-2 right-2 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-md transition-all active:scale-95 z-10 ${p.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white/90 text-orange-500'}`}>
+                          <div className="flex items-center gap-1">
+                            <Icon name={p.status === 'done' ? 'check-circle' : 'circle'} className="w-2.5 h-2.5" /> {p.status}
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Body Details */}
+                      <div className="p-4 flex-1 flex flex-col gap-2">
+                        <input type="text" defaultValue={p.place_name} onBlur={(e) => updatePlaceField(p.id, 'place_name', e.target.value.trim())} className="text-xs font-black uppercase text-slate-800 bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full" />
+                        <div className="flex flex-col gap-1 px-1">
+                          <div className="flex items-center gap-1 -ml-1">
+                            <Icon name="map-pin" className="w-3 h-3 text-slate-400" />
+                            <input type="text" defaultValue={p.locality || ''} placeholder="Unknown Locality" onBlur={(e) => updatePlaceField(p.id, 'locality', e.target.value)} className="text-[9px] font-bold text-slate-400 uppercase bg-transparent border-none outline-none focus:bg-slate-100 hover:bg-slate-50 transition-colors rounded px-1 w-full truncate" />
+                          </div>
+                          <p className={`text-[9px] font-black uppercase flex items-center gap-1 ${locationSource === 'device' ? 'text-blue-500' : 'text-amber-600'}`}>
+                            <Icon name={locationSource === 'device' ? 'navigation-2' : 'home'} className="w-3 h-3" /> {dynamicDistance} KM
+                          </p>
+                        </div>
+                        <select value={p.category} onChange={(e) => updatePlaceField(p.id, 'category', e.target.value)} className="mt-auto text-[9px] font-bold uppercase text-indigo-600 bg-indigo-50 border-none rounded-lg p-1.5 outline-none cursor-pointer hover:bg-indigo-100 transition-colors">
+                          {VALID_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+
+                        {/* Metadata Selectors */}
+                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-50">
+                          <div className="flex items-center gap-2">
+                            <Icon name="shield" className="w-2.5 h-2.5 text-rose-400" />
+                            <select value={p.restriction_level || 'None'} onChange={(e) => updatePlaceField(p.id, 'restriction_level', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-rose-600 bg-rose-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-rose-100">
+                              <option value="None">Public / No Restriction</option>
+                              <option value="Low">Low / General Rules</option>
+                              <option value="High">High / Permit Required</option>
+                              <option value="Restricted">Restricted / No Entry</option>
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Icon name="landmark" className="w-2.5 h-2.5 text-emerald-400" />
+                            <select value={p.governing_org || 'Open'} onChange={(e) => updatePlaceField(p.id, 'governing_org', e.target.value)} className="flex-1 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 border-none rounded p-1 outline-none cursor-pointer hover:bg-emerald-100">
+                              <option value="Open">No Governing Authority</option>
+                              <option value="Department of Wildlife Conservation">Dept. of Wildlife (DWC)</option>
+                              <option value="Department of Forest Conservation">Dept. of Forest Conservation</option>
+                              <option value="Central Cultural Fund">Central Cultural Fund (CCF)</option>
+                              <option value="Coast Conservation Dept">Coastal Resource Management Dept.</option>
+                              <option value="Department of Archaeology">Dept. of Archaeology</option>
+                              <option value="Department of National Botanic Gardens">National Botanic Gardens</option>
+                              <option value="National Livestock Development Board">NLDB</option>
+                              <option value="Local Authorities">Local Authorities (PS)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="p-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-center gap-2">
+                        <button onClick={() => promptForValue(p.id, 'cover_photo_url', p.cover_photo_url, 'Cover Image URL')} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.cover_photo_url ? 'text-indigo-600' : 'text-slate-400'}`} title="Edit Cover Photo">
+                          <Icon name="camera" className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const current = Array.isArray(p.album_photos) ? p.album_photos.join(', ') : '';
+                            const newVal = prompt("Enter Image URLs:", current);
+                            if (newVal !== null) {
+                              const regex = /https:\/\/lh3\.googleusercontent\.com\/pw\/[^"'\s<>]+/g;
+                              const extractedLinks = newVal.match(regex);
+                              const photoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+                              updatePlaceField(p.id, 'album_photos', photoArray);
+                            }
+                          }}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.album_photos?.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
+                          title="Manage Gallery"
+                        >
+                          <Icon name="layout-grid" className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Pinterest Hub Button */}
+                        {p.status === 'done' && (
+                          <button
+                            onClick={() => setActivePinHubId(isPinHubOpen ? null : p.id)}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${isPinHubOpen ? 'bg-red-600 text-white' : 'bg-red-50 text-[#E60023] hover:bg-red-100'}`}
+                            title="Pinterest Hub"
+                          >
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                              <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.966 1.406-5.966s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.261 7.929-7.261 4.162 0 7.397 2.966 7.397 6.93 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.033-1.002 2.324-1.492 3.121 1.12.345 2.3.533 3.524.533 6.621 0 11.988-5.367 11.988-11.987C24.005 5.367 18.638 0 12.017 0z" />
+                            </svg>
+                          </button>
+                        )}
+
+                        <button onClick={() => {
+                          const current = Array.isArray(p.tiktok_urls) ? p.tiktok_urls.join(', ') : '';
+                          const newVal = prompt("Enter TikTok URLs:", current);
+                          if (newVal !== null) {
+                            const tiktokRegex = /https?:\/\/(?:www\.|vm\.)?tiktok\.com\/[^\s"<>]+/g;
+                            const extractedLinks = newVal.match(tiktokRegex);
+                            const videoArray = extractedLinks ? [...new Set(extractedLinks)] : newVal.split(',').map(s => s.trim()).filter(s => s !== "");
+                            updatePlaceField(p.id, 'tiktok_urls', videoArray);
+                          }
+                        }} className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${p.tiktok_urls?.length > 0 ? 'text-cyan-600' : 'text-slate-400'}`} title="Edit Videos">
+                          <Icon name="video" className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => hasArticle ? manualEditArticle(p) : generateTravelArticle(p)}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors ${hasArticle ? 'text-orange-600' : 'text-slate-400'}`}
+                          title={hasArticle ? "Edit Article" : "Generate with AI"}
+                        >
+                          <Icon name={hasArticle ? "file-text" : "sparkles"} className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Delete AI Article */}
+                        {hasArticle && (
+                          <button
+                            onClick={() => window.confirm(`Delete AI article for ${p.place_name}?`) && updatePlaceField(p.id, 'ai_article', {})}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition-colors"
+                            title="Delete AI Article"
+                          >
+                            <Icon name="file-x" className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
 
         {/* TAB 2: MAP */}
