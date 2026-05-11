@@ -14,7 +14,7 @@ serve(async (req: Request): Promise<Response> => {
     const payload = await req.json();
     const { record, old_record } = payload;
 
-    // 2. Trigger Logic: Only fire on transition to 'done'
+    // 2. Trigger Logic: Only fire on first transition to 'done'
     if (record.status !== 'done' || old_record?.status === 'done') {
       return new Response("Skipped: No valid 'done' transition.", { status: 200 });
     }
@@ -63,11 +63,11 @@ serve(async (req: Request): Promise<Response> => {
 
     if (updateError) console.error("Database Update Warning:", updateError.message);
 
-    // 6. Post to X
+    // 6. Post the Adventure to X
     const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}`;
     const message = `New Adventure: ${record.place_name} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
 
-    console.log("Sending request to X API...");
+    console.log(`Sending Tweet to X: ${record.place_name}`);
     const postResponse = await fetch("https://api.twitter.com/2/tweets", {
       method: "POST",
       headers: {
@@ -77,18 +77,17 @@ serve(async (req: Request): Promise<Response> => {
       body: JSON.stringify({ text: message }),
     });
 
-    // Await the response body to ensure the function stays alive
-    const result = await postResponse.json();
+    // CRITICAL: Await result to prevent the 402/Shutdown from killing the request
+    const postResult = await postResponse.json();
     
     if (!postResponse.ok) {
-      console.error("X API Rejected the Post:", JSON.stringify(result));
-      // This will show up in your logs if the permissions are wrong or content is duplicate
-      throw new Error(`X Post Failed: ${result.detail || 'Check App Permissions'}`);
+      console.error("X API Rejected the Post:", JSON.stringify(postResult));
+      throw new Error(`X Post Failed: ${postResult.detail || 'Forbidden/Duplicate'}`);
     }
 
-    console.log("X POST SUCCESSFUL! Tweet ID:", result.data.id);
+    console.log("X POST SUCCESSFUL! Tweet ID:", postResult.data.id);
 
-    return new Response(JSON.stringify(result), { 
+    return new Response(JSON.stringify(postResult), { 
       status: 200,
       headers: { "Content-Type": "application/json" } 
     });
