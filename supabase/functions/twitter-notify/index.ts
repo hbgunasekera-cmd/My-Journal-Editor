@@ -1,53 +1,73 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// 1. Pull Credentials from Supabase Secrets
-// These must be synced via: supabase secrets set KEY=VALUE
+// 1. Setup Environment Configuration
 const CLIENT_ID = Deno.env.get("X_CLIENT_ID");
 const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
-const REFRESH_TOKEN = Deno.env.get("X_REFRESH_TOKEN");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+// Initialize Supabase Client with Service Role (to bypass RLS for token updates)
+const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
 serve(async (req: Request): Promise<Response> => {
   try {
     const payload = await req.json();
     const { record, old_record } = payload;
 
-    // 2. Trigger Logic: Only fire on first transition to 'done'
+    // 2. Trigger Logic: Only fire on transition to 'done'
     if (record.status !== 'done' || old_record?.status === 'done') {
-      console.log("Logic Exit: No valid 'done' transition detected.");
-      return new Response("Skipped", { status: 200 });
+      return new Response("Skipped: No valid 'done' transition.", { status: 200 });
     }
 
-    // 3. Authorize with X API using Basic Auth (Fixes unauthorized_client)
-    console.log("Authorizing with X API...");
+    console.log(`Processing automated post for: ${record.place_name}`);
+
+    // 3. FETCH the current rotating token from the Database
+    const { data: creds, error: fetchError } = await supabase
+      .from('credentials')
+      .select('password')
+      .eq('user_id', 'twitter_bot')
+      .single();
+
+    if (fetchError || !creds) {
+      throw new Error("Missing 'twitter_bot' credentials in database table.");
+    }
+
+    // 4. Authorize with X API using Basic Auth
     const basicAuth = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
-    
     const refreshResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${basicAuth}`, 
+        "Authorization": `Basic ${basicAuth}`,
       },
       body: new URLSearchParams({
-        refresh_token: REFRESH_TOKEN || "",
+        refresh_token: creds.password,
         grant_type: "refresh_token",
-        client_id: CLIENT_ID || "",
+        client_id: CLIENT_ID!,
       }),
     });
 
+    const tokenData = await refreshResponse.json();
     if (!refreshResponse.ok) {
-      const err = await refreshResponse.text();
-      throw new Error(`Refresh failed: ${err}`);
+      throw new Error(`X API Refresh Failed: ${JSON.stringify(tokenData)}`);
     }
 
-    const tokenData = await refreshResponse.json();
+    // 5. AUTO-PERSIST the new refresh token (Self-Healing logic)
+    const { error: updateError } = await supabase
+      .from('credentials')
+      .update({ 
+        password: tokenData.refresh_token,
+        role: 'bot' // Ensuring 'role' is included per your table constraint
+      })
+      .eq('user_id', 'twitter_bot');
 
-    // 4. Construct Message with your gallery domain
-    const place = record.place_name;
-    const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place)}`;
-    const message = `New Adventure: ${place} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
+    if (updateError) console.error("Database Update Warning:", updateError.message);
 
-    // 5. Post to X
-    console.log(`Attempting to post to X: ${place}`);
+    // 6. Post to X
+    const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}`;
+    const message = `New Adventure: ${record.place_name} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
+
     const postResponse = await fetch("https://api.twitter.com/2/tweets", {
       method: "POST",
       headers: {
@@ -58,15 +78,7 @@ serve(async (req: Request): Promise<Response> => {
     });
 
     const result = await postResponse.json();
-    
-    // 6. Token Rotation Alert
-    // X invalidates the old refresh token every time you use it.
-    if (tokenData.refresh_token) {
-      console.log("--- IMPORTANT: NEW REFRESH TOKEN ISSUED ---");
-      console.log("Update X_REFRESH_TOKEN in Supabase Secrets immediately:");
-      console.log(tokenData.refresh_token);
-      console.log("-------------------------------------------");
-    }
+    console.log("X Post Success Result:", JSON.stringify(result));
 
     return new Response(JSON.stringify(result), { 
       status: postResponse.status,
