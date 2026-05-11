@@ -1727,8 +1727,16 @@ function App() {
                       "Location": ["Travel", "Explore"]
                     };
 
-                    // 4. Prevent Duplication using Set
+                    // 4. Construct Unique Hashtag Set
                     const uniqueHashtags = new Set(mandatoryHashtags);
+
+                    // Add Cleaned Location Name as a Hashtag
+                    const locationHashtag = locationName.replace(/[^a-zA-Z0-9]/g, "");
+                    if (locationHashtag) {
+                      uniqueHashtags.add(locationHashtag);
+                    }
+
+                    // Add Category Mapping Tags
                     (categoryMap[category] || []).forEach(tag => uniqueHashtags.add(tag));
 
                     const hashtagString = Array.from(uniqueHashtags)
