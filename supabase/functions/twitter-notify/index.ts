@@ -17,16 +17,19 @@ serve(async (req: Request): Promise<Response> => {
       return new Response("Skipped", { status: 200 });
     }
 
-    // 1. Get the latest token from DB (Ignore Deno.env for this)
+    // 1. Wait for 2 seconds to let any duplicate triggers settle
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // 2. Fetch the current token
     const { data: creds, error: fetchError } = await supabase
       .from('credentials')
-      .select('password')
+      .select('password, updated_at')
       .eq('user_id', 'twitter_bot')
       .single();
 
-    if (fetchError || !creds) throw new Error("DB Fetch failed: " + fetchError?.message);
+    if (fetchError || !creds) throw new Error("DB Fetch failed");
 
-    // 2. Exchange with X
+    // 3. Authorization with X
     const basicAuth = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
     const refreshResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
       method: "POST",
@@ -42,17 +45,19 @@ serve(async (req: Request): Promise<Response> => {
     });
 
     const tokenData = await refreshResponse.json();
-    if (!refreshResponse.ok) throw new Error(`X API Reject: ${JSON.stringify(tokenData)}`);
+    
+    if (!refreshResponse.ok) {
+      console.error(`Token used: ${creds.password.substring(0, 10)}...`);
+      throw new Error(`X API Reject: ${JSON.stringify(tokenData)}`);
+    }
 
-    // 3. SAVE NEW REFRESH TOKEN TO DB IMMEDIATELY
-    const { error: updateError } = await supabase
+    // 4. Update the DB with the NEW token
+    await supabase
       .from('credentials')
       .update({ password: tokenData.refresh_token })
       .eq('user_id', 'twitter_bot');
 
-    if (updateError) console.error("Token Save Failed:", updateError.message);
-
-    // 4. Post the Tweet
+    // 5. Post to X
     const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}`;
     const message = `New Adventure: ${record.place_name} 🏔️\n\nFull gallery: ${url}\n\n#SriLanka #Travel`;
 
@@ -65,14 +70,10 @@ serve(async (req: Request): Promise<Response> => {
       body: JSON.stringify({ text: message }),
     });
 
-    const result = await postResponse.json();
-    if (!postResponse.ok) throw new Error("Post Failed: " + JSON.stringify(result));
-
-    console.log("X POST SUCCESSFUL!");
-    return new Response(JSON.stringify(result), { status: 200 });
+    return new Response("Success", { status: 200 });
 
   } catch (error: any) {
     console.error("Critical Error:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(error.message, { status: 500 });
   }
 });
