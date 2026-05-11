@@ -1255,11 +1255,16 @@ function App() {
     const parseUA = (v) => {
       const fullUA = v.user_agent || "";
 
-      // 1. EXTRACT TAGGED SOURCE
-      // Splits the "Mozilla/5.0...-Source" format used in logVisit
-      const parts = fullUA.split('-');
-      const taggedSource = parts.length > 1 ? parts.pop() : "Direct";
-      const ua = parts.join('-'); // Reconstruct original User Agent
+      // 1. ROBUST TAGGED SOURCE EXTRACTION
+      // Finds the last hyphen to separate the original UA from our custom Source tag
+      const lastHyphenIndex = fullUA.lastIndexOf('-');
+      let taggedSource = "Direct";
+      let ua = fullUA;
+
+      if (lastHyphenIndex !== -1) {
+        ua = fullUA.substring(0, lastHyphenIndex);
+        taggedSource = fullUA.substring(lastHyphenIndex + 1);
+      }
 
       const lowerUA = ua.toLowerCase();
       const fingerprint = `${v.ip_address}_${ua}`;
@@ -1271,11 +1276,12 @@ function App() {
         loyaltyStatus = "Unique Visit";
       }
 
-      // 3. Enhanced Bot Detection
+      // 3. Synchronized Bot Detection (Matching Front-End)
       const botPatterns = [
         'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
         'facebookexternalhit', 'twitterbot', 'google-safety',
-        'headless', 'inspect', 'preview', 'pinterestbot'
+        'headless', 'inspect', 'preview', 'pinterestbot',
+        'clarity', 'bingbot', 'msnbot', 'duckduckbot'
       ];
 
       const isBot = botPatterns.some(pattern => lowerUA.includes(pattern)) ||
@@ -1295,29 +1301,30 @@ function App() {
       else if (ua.includes('Mac OS')) os = 'macOS';
       else if (ua.includes('Linux')) os = 'Linux';
 
-      // 6. MULTI-LAYER SOURCE DETECTION
-      // Priority 1: Start with the tagged source from the hyphenated string
-      let source = taggedSource;
-
-      // Priority 2: If tagged as Direct, deep-scan the UA for In-App browsers
-      if (source === "Direct") {
-        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) source = 'Facebook';
-        else if (lowerUA.includes('messenger') || lowerUA.includes('fb_iab')) source = 'Messenger';
-        else if (lowerUA.includes('instagram')) source = 'Instagram';
-        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) source = 'TikTok';
-        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) source = 'YouTube';
-        else if (lowerUA.includes('pinterest')) source = 'Pinterest';
+      // 6. MULTI-LAYER SOURCE DETECTION (Synchronized with logVisit)
+      let finalSource = taggedSource;
+      
+     if (finalSource === "Direct") {
+        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) finalSource = 'Facebook (App)';
+        else if (lowerUA.includes('instagram')) finalSource = 'Instagram (App)';
+        else if (lowerUA.includes('tiktok')) finalSource = 'TikTok (App)';
+        else if (lowerUA.includes('messenger') || lowerUA.includes('fb_iab')) finalSource = 'Messenger';
+        else if (lowerUA.includes('whatsapp')) finalSource = 'WhatsApp';
+        else if (lowerUA.includes('reddit')) finalSource = 'Reddit (App)';
+        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) finalSource = 'YouTube (App)';
+        else if (lowerUA.includes('pinterest')) finalSource = 'Pinterest';
+        else if (lowerUA.includes('elakiri')) finalSource = 'Elakiri';
       }
 
-      return { type, source, os, isBot, loyaltyStatus };
+      return { type, source: finalSource, os, isBot, loyaltyStatus };
     };
 
-    // IDENTIFY LATEST VISIT: Use already parsed data for consistency
-    const sortedData = [...safeAnalytics].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-    const parsedData = sortedData.map(v => ({ ...v, ...parseUA(v) }));
+    // Process data in a single pass for better performance
+    const parsedData = [...safeAnalytics]
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .map(v => ({ ...v, ...parseUA(v) }));
 
-    // Get the most recent record from the parsed list
-    const latestMetrics = [...parsedData].reverse()[0] || null;
+    const latestMetrics = parsedData.length > 0 ? parsedData[parsedData.length - 1] : null;
 
     const getSortedMetrics = (data, keyOrFn) => {
       const counts = data.reduce((acc, item) => {
@@ -1330,7 +1337,7 @@ function App() {
 
     return {
       latest: latestMetrics,
-      totalVisits: parsedData.filter(v => v.page_path === 'Main Page').length,
+      totalVisits: parsedData.length,
       countries: getSortedMetrics(parsedData, 'country'),
       regions: getSortedMetrics(parsedData, 'region'),
       cities: getSortedMetrics(parsedData, 'city'),
