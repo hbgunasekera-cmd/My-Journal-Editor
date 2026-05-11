@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 // 1. Pull Credentials from Supabase Secrets
-// Ensure these are set in your Supabase Dashboard or via CLI
 const CLIENT_ID = Deno.env.get("X_CLIENT_ID");
 const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
 const REFRESH_TOKEN = Deno.env.get("X_REFRESH_TOKEN"); 
@@ -28,7 +27,7 @@ serve(async (req: Request): Promise<Response> => {
     const message = `New Adventure: ${place} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
 
     // 4. OAuth 2.0 Token Refresh Function
-    // This uses the Basic Auth fix (Client ID + Client Secret)
+    // This uses the Basic Auth fix (Client ID + Client Secret) encoded to Base64
     const getNewTokens = async () => {
       console.log("Refreshing X tokens...");
       const basicAuth = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
@@ -54,7 +53,6 @@ serve(async (req: Request): Promise<Response> => {
     };
 
     // 5. Execution Flow
-    // We refresh the token immediately to ensure the post succeeds
     const tokenData = await getNewTokens();
     
     console.log("Attempting to post to X...");
@@ -71,8 +69,6 @@ serve(async (req: Request): Promise<Response> => {
     
     if (postResponse.ok) {
       console.log("Tweet posted successfully!");
-      // Note: In a production app, you should save the NEW refresh_token 
-      // returned in tokenData back to your DB here.
     } else {
       console.error("X API Error:", JSON.stringify(result));
     }
