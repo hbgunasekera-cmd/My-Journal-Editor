@@ -2,12 +2,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 // 1. Pull Credentials from Supabase Secrets
+// Ensure these are set in your Supabase Dashboard or via CLI
 const CLIENT_ID = Deno.env.get("X_CLIENT_ID");
 const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
-
-// Tokens managed by refresh logic
-let ACCESS_TOKEN = "MHBUdUs2ODVfMWljSk9Rbm5XS0ZpYS1wZTJPRkIyd0hOOE10RnZyV2RNTG40OjE3NzgyODAzODQxNjU6MToxOmF0OjE";
-const REFRESH_TOKEN = "a29iaC1XV3k4OEQtZ1JMdl9yaGVTSmRiY0ZIM3lsOVV1aU9DcXlFVHFSdERDOjE3NzgyODAzODQxNjU6MTowOnJ0OjE";
+const REFRESH_TOKEN = Deno.env.get("X_REFRESH_TOKEN"); 
 
 serve(async (req: Request): Promise<Response> => {
   try {
@@ -24,57 +22,63 @@ serve(async (req: Request): Promise<Response> => {
       return new Response("Skipped", { status: 200 });
     }
 
-    // 3. Shortened Message with CORRECT Domain: my-journal-view.vercel.app
+    // 3. Construct Message
     const place = record.place_name;
     const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place)}`;
     const message = `New Adventure: ${place} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
 
-    // 4. Posting Function Helper
-    const postTweet = async (token: string): Promise<Response> => {
-      return await fetch("https://api.twitter.com/2/tweets", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: message }),
-      });
-    };
-
-    console.log("Attempting to post to X...");
-    let response = await postTweet(ACCESS_TOKEN);
-
-    // 5. OAuth 2.0 Refresh Logic
-    if (response.status === 401) {
-      console.log("Token expired. Refreshing...");
-      const refreshResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
+    // 4. OAuth 2.0 Token Refresh Function
+    // This uses the Basic Auth fix (Client ID + Client Secret)
+    const getNewTokens = async () => {
+      console.log("Refreshing X tokens...");
+      const basicAuth = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+      
+      const response = await fetch("https://api.twitter.com/2/oauth2/token", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "Authorization": `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
+          "Authorization": `Basic ${basicAuth}`,
         },
         body: new URLSearchParams({
-          refresh_token: REFRESH_TOKEN,
+          refresh_token: REFRESH_TOKEN || "",
           grant_type: "refresh_token",
           client_id: CLIENT_ID || "",
         }),
       });
 
-      if (refreshResponse.ok) {
-        const newData = await refreshResponse.json();
-        response = await postTweet(newData.access_token);
-        console.log("Tweet posted successfully with new token.");
-      } else {
-        const errorText = await refreshResponse.text();
+      if (!response.ok) {
+        const errorText = await response.text();
         throw new Error(`Refresh failed: ${errorText}`);
       }
+      return await response.json();
+    };
+
+    // 5. Execution Flow
+    // We refresh the token immediately to ensure the post succeeds
+    const tokenData = await getNewTokens();
+    
+    console.log("Attempting to post to X...");
+    const postResponse = await fetch("https://api.twitter.com/2/tweets", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${tokenData.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: message }),
+    });
+
+    const result = await postResponse.json();
+    
+    if (postResponse.ok) {
+      console.log("Tweet posted successfully!");
+      // Note: In a production app, you should save the NEW refresh_token 
+      // returned in tokenData back to your DB here.
+    } else {
+      console.error("X API Error:", JSON.stringify(result));
     }
 
-    const result = await response.json();
-    console.log("X API Result:", JSON.stringify(result));
-
     return new Response(JSON.stringify(result), { 
-      status: response.status,
+      status: postResponse.status,
       headers: { "Content-Type": "application/json" } 
     });
 
