@@ -1256,7 +1256,6 @@ function App() {
       const fullUA = v.user_agent || "";
 
       // 1. ROBUST TAGGED SOURCE EXTRACTION
-      // Finds the last hyphen to separate the original UA from our custom Source tag
       const lastHyphenIndex = fullUA.lastIndexOf('-');
       let taggedSource = "Direct";
       let ua = fullUA;
@@ -1276,7 +1275,8 @@ function App() {
         loyaltyStatus = "Unique Visit";
       }
 
-      // 3. Synchronized Bot Detection (Matching Front-End)
+      // 3. Synchronized Bot Detection
+      // REMOVED: /\.0\.0\.0/ regex which was misidentifying Elakiri users
       const botPatterns = [
         'bot', 'spider', 'crawl', 'lighthouse', 'slurp',
         'facebookexternalhit', 'twitterbot', 'google-safety',
@@ -1285,8 +1285,7 @@ function App() {
       ];
 
       const isBot = botPatterns.some(pattern => lowerUA.includes(pattern)) ||
-        lowerUA.includes('headlesschrome') ||
-        /\.0\.0\.0/.test(ua);
+        lowerUA.includes('headlesschrome');
 
       // 4. Device Type
       let type = 'Desktop';
@@ -1301,10 +1300,10 @@ function App() {
       else if (ua.includes('Mac OS')) os = 'macOS';
       else if (ua.includes('Linux')) os = 'Linux';
 
-      // 6. MULTI-LAYER SOURCE DETECTION (Synchronized with logVisit)
+      // 6. MULTI-LAYER SOURCE DETECTION
       let finalSource = taggedSource;
-      
-     if (finalSource === "Direct") {
+
+      if (finalSource === "Direct") {
         if (lowerUA.includes('fban') || lowerUA.includes('fbav')) finalSource = 'Facebook (App)';
         else if (lowerUA.includes('instagram')) finalSource = 'Instagram (App)';
         else if (lowerUA.includes('tiktok')) finalSource = 'TikTok (App)';
@@ -1319,7 +1318,6 @@ function App() {
       return { type, source: finalSource, os, isBot, loyaltyStatus };
     };
 
-    // Process data in a single pass for better performance
     const parsedData = [...safeAnalytics]
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map(v => ({ ...v, ...parseUA(v) }));
@@ -1346,6 +1344,7 @@ function App() {
       loyalty: getSortedMetrics(parsedData, 'loyaltyStatus'),
       pageHistory: getSortedMetrics(parsedData, 'page_path'),
       os: getSortedMetrics(parsedData, 'os'),
+      // Now correctly identifies Elakiri users as 'Real Person'
       trafficType: getSortedMetrics(parsedData, v => v.isBot ? 'Bot/Crawler' : 'Real Person'),
       likesSummary: safeLikes.reduce((acc, l) => {
         const locName = l.travel_bucket_list?.place_name || 'Unknown';
