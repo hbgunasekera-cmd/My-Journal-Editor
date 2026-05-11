@@ -7,7 +7,6 @@ const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-// Initialize Supabase Client with Service Role (to bypass RLS for token updates)
 const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
 serve(async (req: Request): Promise<Response> => {
@@ -58,7 +57,7 @@ serve(async (req: Request): Promise<Response> => {
       .from('credentials')
       .update({ 
         password: tokenData.refresh_token,
-        role: 'bot' // Ensuring 'role' is included per your table constraint
+        role: 'bot'
       })
       .eq('user_id', 'twitter_bot');
 
@@ -68,6 +67,7 @@ serve(async (req: Request): Promise<Response> => {
     const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}`;
     const message = `New Adventure: ${record.place_name} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
 
+    console.log("Sending request to X API...");
     const postResponse = await fetch("https://api.twitter.com/2/tweets", {
       method: "POST",
       headers: {
@@ -77,11 +77,19 @@ serve(async (req: Request): Promise<Response> => {
       body: JSON.stringify({ text: message }),
     });
 
+    // Await the response body to ensure the function stays alive
     const result = await postResponse.json();
-    console.log("X Post Success Result:", JSON.stringify(result));
+    
+    if (!postResponse.ok) {
+      console.error("X API Rejected the Post:", JSON.stringify(result));
+      // This will show up in your logs if the permissions are wrong or content is duplicate
+      throw new Error(`X Post Failed: ${result.detail || 'Check App Permissions'}`);
+    }
+
+    console.log("X POST SUCCESSFUL! Tweet ID:", result.data.id);
 
     return new Response(JSON.stringify(result), { 
-      status: postResponse.status,
+      status: 200,
       headers: { "Content-Type": "application/json" } 
     });
 
