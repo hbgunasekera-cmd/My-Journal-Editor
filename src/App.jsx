@@ -491,23 +491,23 @@ function App() {
   }, [searchTerm, places]);
 
 
-useEffect(() => {
-  if (filteredPlaces.length > 0 && searchTerm.length > 2 && mapRef.current) {
-    const firstMatch = filteredPlaces[0];
-    
-    // Parse coordinates to ensure they are numbers
-    const lat = parseFloat(firstMatch.latitude);
-    const lng = parseFloat(firstMatch.longitude);
+  useEffect(() => {
+    if (filteredPlaces.length > 0 && searchTerm.length > 2 && mapRef.current) {
+      const firstMatch = filteredPlaces[0];
 
-    // Only fly if coordinates are valid numbers
-    if (!isNaN(lat) && !isNaN(lng)) {
-      mapRef.current.flyTo([lat, lng], 12, {
-        animate: true,
-        duration: 1.5
-      });
+      // Parse coordinates to ensure they are numbers
+      const lat = parseFloat(firstMatch.latitude);
+      const lng = parseFloat(firstMatch.longitude);
+
+      // Only fly if coordinates are valid numbers
+      if (!isNaN(lat) && !isNaN(lng)) {
+        mapRef.current.flyTo([lat, lng], 12, {
+          animate: true,
+          duration: 1.5
+        });
+      }
     }
-  }
-}, [filteredPlaces, searchTerm]);
+  }, [filteredPlaces, searchTerm]);
 
 
   const triggerToast = (msg) => {
@@ -671,15 +671,15 @@ useEffect(() => {
         // Safe check for 'a' coordinates
         const latA = parseFloat(a.latitude);
         const lngA = parseFloat(a.longitude);
-        const distA = (!isNaN(latA) && !isNaN(lngA)) 
-          ? L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(latA, lngA)) 
+        const distA = (!isNaN(latA) && !isNaN(lngA))
+          ? L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(latA, lngA))
           : Infinity; // Push invalid locations to the bottom
 
         // Safe check for 'b' coordinates
         const latB = parseFloat(b.latitude);
         const lngB = parseFloat(b.longitude);
-        const distB = (!isNaN(latB) && !isNaN(lngB)) 
-          ? L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(latB, lngB)) 
+        const distB = (!isNaN(latB) && !isNaN(lngB))
+          ? L.latLng(sortCenter.lat, sortCenter.lng).distanceTo(L.latLng(latB, lngB))
           : Infinity; // Push invalid locations to the bottom
 
         return distA - distB;
@@ -1694,17 +1694,63 @@ useEffect(() => {
                   const isPinHubOpen = activePinHubId === p.id;
 
                   const pinIndividualImage = (imageUrl, index) => {
-                    const shareUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(p.place_name)}&utm_source=pinterest`;
-                    const descriptions = [
-                      `A breathtaking view of ${p.place_name}, Sri Lanka. © Hasitha Gunasekera`,
-                      `Experience the raw beauty and scale of ${p.place_name}. A visual story from My Journal.`,
-                      `Uncovering the unique landscapes of ${p.place_name}. Every frame tells a story of adventure.`,
-                      `Cinematic highlights from ${p.place_name}. Documenting the untouched corners of the island.`
+                    // 1. Resolve Data & URLs
+                    const locationName = p?.place_name || "New Discovery";
+                    const category = p?.category || "Location";
+                    const baseUrl = "https://my-journal-view.vercel.app";
+                    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&utm_source=pinterest_individual_pin`;
+
+                    // 2. Mandatory Hashtags (Always included)
+                    const mandatoryHashtags = [
+                      "MyJournal", "SriLanka", "VisitSriLanka", "TravelSriLanka",
+                      "WanderlustSriLanka", "BeautifulSriLanka", "HiddenGemsSriLanka", "SriLankaDiaries",
+                      "ChasingWaterfalls", "HikingAdventures", "CampingLife", "MountainViews",
+                      "NatureSeekers", "AdventureSriLanka", "ExploreSriLanka", "TravelPhotography",
+                      "TravelDiaries", "IslandParadise", "ProtectNature", "CeylonVibes"
                     ];
-                    const selectedDesc = `${descriptions[index % descriptions.length]} #TravelSriLanka #MyJournal #ExploreSriLanka`;
-                    const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(selectedDesc)}`;
+
+                    // 3. Category Mapping
+                    const categoryMap = {
+                      "Waterfall": ["Waterfalls", "Nature"],
+                      "Mountain": ["Mountains", "Peaks", "Hiking"],
+                      "Trail": ["Trekking", "Adventure"],
+                      "Viewpoint": ["ScenicViews", "Landscape"],
+                      "Beach": ["Coastal", "OceanVibes"],
+                      "Park": ["NationalPark", "Wildlife"],
+                      "Plateaus": ["Highlands", "Plains"],
+                      "Reserved Forest": ["Rainforest", "EcoTravel"],
+                      "Monastery": ["Spiritual", "BuddhistTemple"],
+                      "Archaeology": ["AncientHistory", "Heritage"],
+                      "Reservoir": ["Lakes", "WaterViews"],
+                      "Pool": ["NaturalPool", "Swimming"],
+                      "Stream": ["Rivers", "Streams"],
+                      "Location": ["Travel", "Explore"]
+                    };
+
+                    // 4. Prevent Duplication using Set
+                    const uniqueHashtags = new Set(mandatoryHashtags);
+                    (categoryMap[category] || []).forEach(tag => uniqueHashtags.add(tag));
+
+                    const hashtagString = Array.from(uniqueHashtags)
+                      .map(tag => `#${tag}`)
+                      .join(' ');
+
+                    // 5. Rotating Descriptions
+                    const baseDescriptions = [
+                      `A breathtaking view of ${locationName}, Sri Lanka.`,
+                      `Experience the raw beauty and scale of ${locationName}. A visual story from My Journal.`,
+                      `Uncovering the unique landscapes of ${locationName}. Every frame tells a story of adventure.`,
+                      `Cinematic highlights from ${locationName}. Documenting the untouched corners of the island.`
+                    ];
+
+                    const selectedBase = baseDescriptions[index % baseDescriptions.length];
+                    const finalDescription = `${selectedBase} (${category}) © Hasitha Gunasekera\n\n${hashtagString}`;
+
+                    // 6. Execution
+                    const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
 
                     window.open(pinterestUrl, '_blank', 'width=750,height=600,scrollbars=yes,resizable=yes');
+
                     if (typeof setActivePinHubId === 'function') setActivePinHubId(null);
                   };
 
