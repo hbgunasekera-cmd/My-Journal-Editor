@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// 1. Setup Environment Configuration
 const CLIENT_ID = Deno.env.get("X_CLIENT_ID");
 const CLIENT_SECRET = Deno.env.get("X_CLIENT_SECRET");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -14,25 +13,20 @@ serve(async (req: Request): Promise<Response> => {
     const payload = await req.json();
     const { record, old_record } = payload;
 
-    // 2. Trigger Logic: Only fire on first transition to 'done'
     if (record.status !== 'done' || old_record?.status === 'done') {
-      return new Response("Skipped: No valid 'done' transition.", { status: 200 });
+      return new Response("Skipped", { status: 200 });
     }
 
-    console.log(`Processing automated post for: ${record.place_name}`);
-
-    // 3. FETCH the current rotating token from the Database
+    // 1. Get the latest token from DB (Ignore Deno.env for this)
     const { data: creds, error: fetchError } = await supabase
       .from('credentials')
       .select('password')
       .eq('user_id', 'twitter_bot')
       .single();
 
-    if (fetchError || !creds) {
-      throw new Error("Missing 'twitter_bot' credentials in database table.");
-    }
+    if (fetchError || !creds) throw new Error("DB Fetch failed: " + fetchError?.message);
 
-    // 4. Authorize with X API using Basic Auth
+    // 2. Exchange with X
     const basicAuth = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
     const refreshResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
       method: "POST",
@@ -48,26 +42,20 @@ serve(async (req: Request): Promise<Response> => {
     });
 
     const tokenData = await refreshResponse.json();
-    if (!refreshResponse.ok) {
-      throw new Error(`X API Refresh Failed: ${JSON.stringify(tokenData)}`);
-    }
+    if (!refreshResponse.ok) throw new Error(`X API Reject: ${JSON.stringify(tokenData)}`);
 
-    // 5. AUTO-PERSIST the new refresh token (Self-Healing logic)
+    // 3. SAVE NEW REFRESH TOKEN TO DB IMMEDIATELY
     const { error: updateError } = await supabase
       .from('credentials')
-      .update({ 
-        password: tokenData.refresh_token,
-        role: 'bot'
-      })
+      .update({ password: tokenData.refresh_token })
       .eq('user_id', 'twitter_bot');
 
-    if (updateError) console.error("Database Update Warning:", updateError.message);
+    if (updateError) console.error("Token Save Failed:", updateError.message);
 
-    // 6. Post the Adventure to X
+    // 4. Post the Tweet
     const url = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(record.place_name)}`;
-    const message = `New Adventure: ${record.place_name} 🏔️\n\nFull gallery here:\n${url}\n\n#SriLanka #Travel #Drone`;
+    const message = `New Adventure: ${record.place_name} 🏔️\n\nFull gallery: ${url}\n\n#SriLanka #Travel`;
 
-    console.log(`Sending Tweet to X: ${record.place_name}`);
     const postResponse = await fetch("https://api.twitter.com/2/tweets", {
       method: "POST",
       headers: {
@@ -77,26 +65,14 @@ serve(async (req: Request): Promise<Response> => {
       body: JSON.stringify({ text: message }),
     });
 
-    // CRITICAL: Await result to prevent the 402/Shutdown from killing the request
-    const postResult = await postResponse.json();
-    
-    if (!postResponse.ok) {
-      console.error("X API Rejected the Post:", JSON.stringify(postResult));
-      throw new Error(`X Post Failed: ${postResult.detail || 'Forbidden/Duplicate'}`);
-    }
+    const result = await postResponse.json();
+    if (!postResponse.ok) throw new Error("Post Failed: " + JSON.stringify(result));
 
-    console.log("X POST SUCCESSFUL! Tweet ID:", postResult.data.id);
-
-    return new Response(JSON.stringify(postResult), { 
-      status: 200,
-      headers: { "Content-Type": "application/json" } 
-    });
+    console.log("X POST SUCCESSFUL!");
+    return new Response(JSON.stringify(result), { status: 200 });
 
   } catch (error: any) {
-    console.error("Critical Function Error:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), { 
-      status: 500,
-      headers: { "Content-Type": "application/json" } 
-    });
+    console.error("Critical Error:", error.message);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 });
