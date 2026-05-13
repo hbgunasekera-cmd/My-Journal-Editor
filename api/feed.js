@@ -14,30 +14,33 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 2. Data Fetching: Retrieve at least 20 items as per Flipboard guidance
+  // 2. Data Fetching
   const { data: places, error } = await supabase
     .from('travel_bucket_list') 
-    .select(`id, place_name, created_at, cover_photo_url, ai_article, status`)
+    .select(`id, place_name, created_at, cover_photo_url, ai_article, status, tags`) // Added 'tags' for Mastodon hashtags
     .eq('status', 'done') 
     .order('created_at', { ascending: false })
-    .limit(25); // Increased to 25 to ensure a healthy buffer over the 20-item minimum
+    .limit(25);
 
   if (error) return res.status(500).json({ error: error.message });
 
   // 3. Construct RSS Items
   const rssItems = places.map(place => {
-    // We use a generic UTM to track traffic from aggregators
-    const itemUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=rss_feed`;
-    
+    const itemUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=mastodon_rss`;
     const escapedUrl = itemUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
     
-    // Flipboard prefers longer descriptions (> 300 chars)
+    // Formatting Tags for MastoFeed (category tags become hashtags)
+    // If you don't have a tags column, we'll use defaults
+    const categories = place.tags && Array.isArray(place.tags) 
+      ? place.tags.map(t => `<category>${t}</category>`).join('')
+      : `<category>Travel</category><category>SriLanka</category><category>Photography</category>`;
+
     const storyText = place.ai_article?.story 
       ? place.ai_article.story.trim() 
-      : `Explore the beauty of ${place.place_name} in Sri Lanka. Check out the full gallery and trip details on My Journal.`;
+      : `Explore the beauty of ${place.place_name} in Sri Lanka.`;
     
-    const fullDescription = `${storyText} \n\n© My Journal | Hasitha Gunasekera. Original photography and travel guides.`;
+    const fullDescription = `${storyText} \n\n© My Journal | Hasitha Gunasekera.`;
     
     return `
       <item>
@@ -47,20 +50,16 @@ export default async function handler(req, res) {
         <pubDate>${new Date(place.created_at).toUTCString()}</pubDate>
         <dc:creator>Hasitha Gunasekera</dc:creator>
         <description><![CDATA[${fullDescription}]]></description>
-        
-        <category>Travel</category>
-
+        ${categories}
         <enclosure url="${escapedMediaUrl}" length="0" type="image/jpeg" />
-
         <media:content url="${escapedMediaUrl}" medium="image" width="1200" height="800">
            <media:title type="plain"><![CDATA[${place.place_name}]]></media:title>
            <media:credit role="photographer">Hasitha Gunasekera</media:credit>
-           <media:copyright>My Journal | Sri Lanka</media:copyright>
         </media:content>
       </item>`;
   }).join('');
 
-  // 4. Construct the Full RSS XML with all necessary Namespaces
+  // 4. Construct the Full RSS XML
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
     <rss version="2.0" 
          xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -70,8 +69,8 @@ export default async function handler(req, res) {
       <channel>
         <title>My Journal | Sri Lanka Travel Photography</title>
         <link>https://my-journal-view.vercel.app/</link>
-        <atom:link href="https://my-journal-view.vercel.app/api/feed" rel="self" type="application/rss+xml" />
-        <description>Cinematic travel stories, trekking guides, and photography from Sri Lanka by Hasitha Gunasekera.</description>
+        <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
+        <description>Cinematic travel stories from Sri Lanka by Hasitha Gunasekera.</description>
         <language>en-us</language>
         <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
         ${rssItems}
