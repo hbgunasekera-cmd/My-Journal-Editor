@@ -539,32 +539,30 @@ function App() {
     if (!p) return;
 
     const locationName = p.place_name || "New Discovery";
-    // IMPORTANT: Flipboard needs a live URL to crawl. 
-    // If you are on localhost, Flipboard will fall back to site defaults.
     const baseUrl = "https://my-journal-view.vercel.app";
-    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&utm_source=flipboard`;
+
+    // Use a cache-buster (?t=) to force Flipboard to re-scrape if you've updated the image
+    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&t=${Date.now()}`;
 
     // --- TIDY 20-WORD DESCRIPTION ---
     let shortDesc = "";
-    // Check both possible AI article structures
-    const storyText = p.ai_article?.story || p.ai_article?.description || p.ai_article?.content;
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
 
     if (storyText) {
-      // Get the first sentence
-      shortDesc = storyText.split('.')[0].trim() + '.';
-      // Safety cap at ~120 chars to keep it around 20 words
-      if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 117) + "...";
+      // Get first sentence + Clean Markdown
+      shortDesc = storyText.replace(/[#*]/g, '').split('.')[0].trim() + '.';
+      if (shortDesc.length > 140) shortDesc = shortDesc.substring(0, 137) + "...";
     } else {
-      shortDesc = `Experience the raw beauty of ${locationName}. A hidden gem in the heart of Sri Lanka.`;
+      shortDesc = `Discovering the untouched beauty of ${locationName} in Sri Lanka.`;
     }
 
-    // --- FORMATTING THE CAPTION ---
-    const hashtags = "#MyJournal #SriLanka #Travel #IslandVignettes";
-    const fullCaption = `${shortDesc}\n\n📍 ${locationName}\n\n${hashtags}`;
+    // --- ARTISTIC CAPTION ---
+    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+    const fullTitle = `${locationName} | ${shortDesc} ${hashtags}`;
 
-    // --- THE FLIPBOARD POPUP ---
-    // Using the 'popout' endpoint which often handles manual overrides better
-    const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(fullCaption)}&ext_img=${encodeURIComponent(p.cover_photo_url || '')}`;
+    // --- THE FIX: FLIPIT ENDPOINT ---
+    // Using 'flipit/flip' with 'ext_img' is the only way to override the site logo
+    const flipboardUrl = `https://share.flipboard.com/flipit/flip?v=2&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(fullTitle)}&ext_img=${encodeURIComponent(p.cover_photo_url || '')}`;
 
     window.open(
       flipboardUrl,
