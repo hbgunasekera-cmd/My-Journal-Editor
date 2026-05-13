@@ -535,31 +535,31 @@ function App() {
 
   // --- Social Sharing Logic (Add this inside your App component) ---
 
- const handleFlipboardShare = (p) => {
-  if (!p) return;
+  const handleFlipboardShare = (p) => {
+    if (!p) return;
 
-  // 1. The URL Flipboard will crawl to find images
-  // IMPORTANT: This must be a publicly accessible URL (not localhost)
-  const baseUrl = "https://my-journal-view.vercel.app";
-  const shareUrl = `${baseUrl}/?place=${encodeURIComponent(p.place_name)}`;
+    // 1. The URL Flipboard will crawl to find images
+    // IMPORTANT: This must be a publicly accessible URL (not localhost)
+    const baseUrl = "https://my-journal-view.vercel.app";
+    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(p.place_name)}`;
 
-  // 2. Tidy Title for the Magazine
-  // Matches your magazine: "Island Vignettes: A Sri Lankan Journal"
-  const artisticTitle = p.ai_article?.title 
-    ? `✨ ${p.ai_article.title} | Island Vignettes` 
-    : `✨ ${p.place_name} — Island Vignettes: A Sri Lankan Journal`;
+    // 2. Tidy Title for the Magazine
+    // Matches your magazine: "Island Vignettes: A Sri Lankan Journal"
+    const artisticTitle = p.ai_article?.title
+      ? `✨ ${p.ai_article.title} | Island Vignettes`
+      : `✨ ${p.place_name} — Island Vignettes: A Sri Lankan Journal`;
 
-  // 3. Construct the official Flipboard Popout URL
-  // v=2 is the required version for the modern Flipboard scraper
-  const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2&title=${encodeURIComponent(artisticTitle)}&url=${encodeURIComponent(shareUrl)}`;
+    // 3. Construct the official Flipboard Popout URL
+    // v=2 is the required version for the modern Flipboard scraper
+    const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2&title=${encodeURIComponent(artisticTitle)}&url=${encodeURIComponent(shareUrl)}`;
 
-  // 4. Open in a standard share-sized window
-  window.open(
-    flipboardUrl, 
-    'flipboard-share', 
-    'width=600,height=600,menubar=no,toolbar=no,resizable=yes,scrollbars=yes'
-  );
-};
+    // 4. Open in a standard share-sized window
+    window.open(
+      flipboardUrl,
+      'flipboard-share',
+      'width=600,height=600,menubar=no,toolbar=no,resizable=yes,scrollbars=yes'
+    );
+  };
 
   const pinIndividualImage = (imageUrl, index, p) => {
     if (!p) return;
