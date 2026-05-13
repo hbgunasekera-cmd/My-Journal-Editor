@@ -1419,32 +1419,32 @@ function App() {
           finalSource = 'Messenger';
         }
         else if (lowerUA.includes('instagram')) {
-          finalSource = 'Instagram (App)';
+          finalSource = 'Instagram';
         }
         else if (lowerUA.includes('fban') || lowerUA.includes('fbav')) {
-          finalSource = 'Facebook (App)';
+          finalSource = 'Facebook';
         }
         // 2. Other Apps
         else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) {
-          finalSource = 'TikTok (App)';
+          finalSource = 'TikTok';
         }
         else if (lowerUA.includes('whatsapp')) {
           finalSource = 'WhatsApp';
         }
         else if (lowerUA.includes('reddit')) {
-          finalSource = 'Reddit (App)';
+          finalSource = 'Reddit';
         }
         else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) {
-          finalSource = 'YouTube (App)';
+          finalSource = 'YouTube';
         }
         else if (lowerUA.includes('pinterest')) {
           finalSource = 'Pinterest';
         }
         else if (lowerUA.includes('elakiri')) {
           finalSource = 'Elakiri';
-          
+
         } else if (lowerUA.includes('twitter')) {
-          finalSource = 'Twitter (X)';
+          finalSource = 'Twitter(X)';
         }
         else if (lowerUA.includes('flipboard')) {
           finalSource = 'Flipboard';
