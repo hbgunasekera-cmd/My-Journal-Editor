@@ -538,26 +538,38 @@ function App() {
   const handleFlipboardShare = (p) => {
     if (!p) return;
 
-    // 1. The URL Flipboard will crawl to find images
-    // IMPORTANT: This must be a publicly accessible URL (not localhost)
+    const locationName = p.place_name || "New Discovery";
+    // IMPORTANT: Flipboard needs a live URL to crawl. 
+    // If you are on localhost, Flipboard will fall back to site defaults.
     const baseUrl = "https://my-journal-view.vercel.app";
-    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(p.place_name)}`;
+    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&utm_source=flipboard`;
 
-    // 2. Tidy Title for the Magazine
-    // Matches your magazine: "Island Vignettes: A Sri Lankan Journal"
-    const artisticTitle = p.ai_article?.title
-      ? `✨ ${p.ai_article.title} | Island Vignettes`
-      : `✨ ${p.place_name} — Island Vignettes: A Sri Lankan Journal`;
+    // --- TIDY 20-WORD DESCRIPTION ---
+    let shortDesc = "";
+    // Check both possible AI article structures
+    const storyText = p.ai_article?.story || p.ai_article?.description || p.ai_article?.content;
 
-    // 3. Construct the official Flipboard Popout URL
-    // v=2 is the required version for the modern Flipboard scraper
-    const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2&title=${encodeURIComponent(artisticTitle)}&url=${encodeURIComponent(shareUrl)}`;
+    if (storyText) {
+      // Get the first sentence
+      shortDesc = storyText.split('.')[0].trim() + '.';
+      // Safety cap at ~120 chars to keep it around 20 words
+      if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 117) + "...";
+    } else {
+      shortDesc = `Experience the raw beauty of ${locationName}. A hidden gem in the heart of Sri Lanka.`;
+    }
 
-    // 4. Open in a standard share-sized window
+    // --- FORMATTING THE CAPTION ---
+    const hashtags = "#MyJournal #SriLanka #Travel #IslandVignettes";
+    const fullCaption = `${shortDesc}\n\n📍 ${locationName}\n\n${hashtags}`;
+
+    // --- THE FLIPBOARD POPUP ---
+    // Using the 'popout' endpoint which often handles manual overrides better
+    const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(fullCaption)}&ext_img=${encodeURIComponent(p.cover_photo_url || '')}`;
+
     window.open(
       flipboardUrl,
       'flipboard-share',
-      'width=600,height=600,menubar=no,toolbar=no,resizable=yes,scrollbars=yes'
+      'width=1000,height=600,scrollbars=yes,resizable=yes'
     );
   };
 
@@ -2058,8 +2070,8 @@ function App() {
                       {/* Action Footer: Social Share Buttons */}
                       <div className="p-3 border-t border-slate-50 bg-slate-50/50 flex items-center justify-between gap-2">
                         <button
-                          onClick={() => handleFlipboardShare(p)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm"
+                          onClick={() => handleFlipboardShare(p)} // Must pass 'p' here
+                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
                         >
                           <Icon name="refresh-cw" className="w-3 h-3" />
                           <span className="text-[9px] font-black uppercase">Flipboard</span>
