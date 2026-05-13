@@ -623,101 +623,47 @@ function App() {
 const handleMastodonShare = async (p) => {
   if (!p) return;
 
-  // Helper for internal toast calls
-  const notify = (msg) => {
-    if (typeof triggerToast === 'function') triggerToast(msg);
-    else if (typeof setToast === 'function') {
-      setToast({ show: true, msg });
-      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
-    }
-  };
+  // 1. DATA PREP (Flipboard Method)
+  const locationName = p.place_name || "New Discovery";
+  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+  
+  let storyText = p.ai_article?.story || p.ai_article?.description || "";
+  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
+  // 2. WORD-SAFE TRUNCATION
+  const reservedLength = locationName.length + shareLink.length + hashtags.length + 30;
+  const maxSpace = 500 - reservedLength;
+
+  if (shortDesc.length > maxSpace) {
+    let temp = shortDesc.substring(0, maxSpace - 3);
+    const lastSpace = temp.lastIndexOf(" ");
+    shortDesc = (lastSpace > 0 ? temp.substring(0, lastSpace) : temp) + "...";
+  }
+
+  const tootText = `${locationName}\n\n${shortDesc}\n\n 🔗 Web : ${shareLink}\n\n${hashtags}`;
+
+  // 3. CALL YOUR NEW BACKEND PROXY
   try {
-    // 1. Content Preparation
-    const locationName = p.place_name || "New Discovery";
-    const shareLink = "https://my-journal-view.vercel.app"; // Main website link
-    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
-    const coverImageUrl = p.cover_photo_url || "";
-
-    // 2. Paragraph Extraction
-    let storyText = p.ai_article?.story || p.ai_article?.description || "";
-    let shortDesc = storyText 
-      ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, "").trim() 
-      : `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
-
-    // 3. Truncation (500 Char Limit)
-    const reserved = locationName.length + shareLink.length + hashtags.length + 40;
-    const maxText = 500 - reserved;
-
-    if (shortDesc.length > maxText) {
-      let cut = shortDesc.substring(0, maxText);
-      const lastSentence = cut.lastIndexOf(". ");
-      shortDesc = (lastSentence > 80) 
-        ? cut.substring(0, lastSentence + 1) 
-        : cut.substring(0, cut.lastIndexOf(" ")) + "...";
-    }
-
-    const tootText = `${locationName}\n\n${shortDesc}\n\n🔗 Web: ${shareLink}\n\n${hashtags}`;
-
-    // 4. API Configuration
-    const accessToken = import.meta.env.VITE_MASTODON_ACCESS_TOKEN;
-    if (!accessToken) throw new Error("Missing Access Token");
-
-    const authHeader = { Authorization: `Bearer ${accessToken}` };
-    let mediaIds = [];
-
-    // 5. Media Upload (Remote URL Method)
-    if (coverImageUrl) {
-      try {
-        const formData = new FormData();
-        formData.append("url", coverImageUrl);
-        formData.append("description", `Scenic view of ${locationName}, Sri Lanka`);
-
-        const mediaResp = await fetch("https://mastodon.social/api/v2/media", {
-          method: "POST",
-          headers: authHeader,
-          body: formData
-        });
-
-        if (!mediaResp.ok) throw new Error(await mediaResp.text());
-        const mediaData = await mediaResp.json();
-        const mediaId = mediaData.id;
-
-        // Poll for processing completion
-        for (let i = 0; i < 10; i++) {
-          const check = await fetch(`https://mastodon.social/api/v1/media/${mediaId}`, { headers: authHeader });
-          const status = await check.json();
-          
-          if (!status.processing && (status.url || status.preview_url)) {
-            mediaIds.push(mediaId);
-            break;
-          }
-          await new Promise(r => setTimeout(r, 1500));
-        }
-      } catch (mediaErr) {
-        console.error("Image Upload Failed:", mediaErr);
-        notify("Image upload failed — posting text only");
-      }
-    }
-
-    // 6. Post Status
-    const response = await fetch("https://mastodon.social/api/v1/statuses", {
-      method: "POST",
-      headers: { ...authHeader, "Content-Type": "application/json" },
+    const response = await fetch('/api/share-mastodon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        status: tootText,
-        media_ids: mediaIds,
-        visibility: "public"
-      })
+        tootText,
+        coverImageUrl: p.cover_photo_url,
+        locationName
+      }),
     });
 
-    if (!response.ok) throw new Error(await response.text());
-
-    notify(mediaIds.length > 0 ? "Posted to Mastodon with image!" : "Posted to Mastodon!");
-
+    if (response.ok) {
+      setToast?.({ show: true, msg: "Shared with location photo via Proxy!" });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+    } else {
+      throw new Error("Proxy failed to share");
+    }
   } catch (err) {
-    console.error("MASTODON ERROR:", err);
-    notify(`Mastodon failed: ${err.message}`);
+    console.error("Mastodon Error:", err);
+    setToast?.({ show: true, msg: "Post failed. Check console." });
   }
 };
 
