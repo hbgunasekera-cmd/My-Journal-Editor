@@ -6,27 +6,26 @@ export default async function handler(req, res) {
   const accessToken = process.env.MASTODON_ACCESS_TOKEN;
 
   if (!accessToken) {
-    return res.status(500).json({ error: "MASTODON_ACCESS_TOKEN is not configured in Vercel" });
+    return res.status(500).json({ error: "MASTODON_ACCESS_TOKEN not found in Vercel environment." });
   }
 
   try {
     let mediaIds = [];
 
-    // 1. Fetch the Image
+    // 1. PROCESS IMAGE
     if (coverImageUrl) {
       try {
         const imageResp = await fetch(coverImageUrl);
         if (!imageResp.ok) throw new Error(`Failed to fetch image: ${imageResp.statusText}`);
         
         const arrayBuffer = await imageResp.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const uint8Array = new Uint8Array(arrayBuffer);
 
-        // Prepare FormData for the Mastodon Media API
+        // Mastodon requires a Multipart form with a filename
         const formData = new FormData();
+        const fileBlob = new Blob([uint8Array], { type: 'image/jpeg' });
         
-        // We create a Blob from the buffer and must provide a filename ('cover.jpg')
-        // Mastodon's API uses the filename to determine the upload is a file.
-        const fileBlob = new Blob([buffer], { type: 'image/jpeg' });
+        // The third argument 'cover.jpg' is MANDATORY for Mastodon validation
         formData.append('file', fileBlob, 'cover.jpg');
         formData.append('description', `Scenic view of ${locationName}`);
 
@@ -40,16 +39,16 @@ export default async function handler(req, res) {
           const mediaData = await mediaUpload.json();
           mediaIds.push(mediaData.id);
         } else {
-          const errorText = await mediaUpload.text();
-          console.error("Mastodon Media API Error:", errorText);
+          const mediaErr = await mediaUpload.json();
+          console.error("Mastodon Media API Error:", mediaErr);
+          // If media fails, we still want to try posting the text
         }
       } catch (imgErr) {
-        console.error("Image Processing Error:", imgErr.message);
-        // We continue so the text post still goes through even if the image fails
+        console.error("Image Processing Failed:", imgErr.message);
       }
     }
 
-    // 2. Post the Status
+    // 2. POST STATUS
     const statusResp = await fetch('https://mastodon.social/api/v1/statuses', {
       method: 'POST',
       headers: {
@@ -73,6 +72,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Proxy Global Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 }
