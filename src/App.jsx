@@ -510,6 +510,82 @@ function App() {
   }, [filteredPlaces, searchTerm]);
 
 
+  // Social Media Sharing
+
+  const socialLocations = useMemo(() =>
+    places.filter(p => p.status === 'done'),
+    [places]
+  );
+
+  const getAiMetadata = (p) => {
+    // Assuming p.ai_article contains the AI generated content
+    // We can fallback to defaults if the AI hasn't run yet
+    const content = p.ai_article || "";
+    const titleMatch = content.match(/# (.*)/); // Try to find a markdown H1
+    const artisticTitle = titleMatch ? titleMatch[1] : `✨ Discover ${p.place_name}`;
+
+    // Clean description (remove hashtags and titles for the base text)
+    const description = content
+      .replace(/# .*/g, '')
+      .replace(/#\w+/g, '')
+      .substring(0, 200) + "...";
+
+    return { artisticTitle, description };
+  };
+
+  // --- Social Sharing Logic (Add this inside your App component) ---
+
+  const handleFlipboardShare = (p) => {
+    const baseUrl = "https://my-journal-view.vercel.app";
+    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(p.place_name)}`;
+
+    // Use AI Title if available, fallback to standard
+    const artisticTitle = p.ai_article?.title
+      ? `✨ ${p.ai_article.title} — Island Vignettes`
+      : `✨ ${p.place_name} — Island Vignettes: A Sri Lankan Journal`;
+
+    const flipboardUrl = `https://share.flipboard.com/flipit/flip?v=2&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(artisticTitle)}`;
+
+    window.open(flipboardUrl, '_blank', 'width=1000,height=600,scrollbars=yes,resizable=yes');
+  };
+
+  const pinIndividualImage = (imageUrl, index, p) => {
+    if (!p) return;
+
+    const locationName = p.place_name || "New Discovery";
+    const baseUrl = "https://my-journal-view.vercel.app";
+    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&utm_source=pinterest`;
+
+    // --- TIDY DESCRIPTION LOGIC (Targeting ~20-30 words) ---
+    let shortDesc = "";
+    const fullStory = p.ai_article?.story || p.ai_article?.description;
+
+    if (fullStory) {
+      // Take ONLY the first sentence for maximum tidiness
+      shortDesc = fullStory.split('.')[0].trim() + '.';
+      // Safety cap to prevent long run-on sentences from exceeding 25 words
+      if (shortDesc.length > 150) shortDesc = shortDesc.substring(0, 147) + "...";
+    } else {
+      // Punchy Fallbacks
+      const fallbacks = [
+        `Breathtaking views at ${locationName}. A stunning escape in Sri Lanka.`,
+        `Capturing the raw beauty of ${locationName}. Island secrets revealed.`,
+        `Serene vibes and hidden landscapes. Discovering ${locationName}.`,
+        `The unique soul of ${locationName}, Sri Lanka. A visual journal.`
+      ];
+      shortDesc = fallbacks[index % fallbacks.length];
+    }
+
+    const hashtagString = "#MyJournal #SriLanka #Travel #IslandVibes";
+    const finalDescription = `${shortDesc}\n\n📍 ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
+
+    const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
+
+    window.open(pinterestUrl, '_blank', 'width=750,height=600');
+    if (typeof setActivePinHubId === 'function') setActivePinHubId(null);
+  };
+
+
   const triggerToast = (msg) => {
     setToast({ show: true, msg });
     setTimeout(() => setToast({ show: false, msg: '' }), 2500);
@@ -1466,24 +1542,6 @@ function App() {
   };
 
 
-  /**
- * Executes the "Share to Flipboard" intent.
- * Uses an artistic title and links back to the main journal.
- */
-  const handleFlipboardShare = (p) => {
-    const shareUrl = "https://my-journal-view.vercel.app/?utm_source=flipboard";
-    // Artistic Title combining the location and your magazine name
-    const artisticTitle = `✨ ${p.place_name} — Island Vignettes: A Sri Lankan Journal`;
-
-    // Standardized Flipboard sharing URL structure
-    const flipboardUrl = `https://share.flipboard.com/flipit/flip?v=2&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(artisticTitle)}`;
-
-    window.open(
-      flipboardUrl,
-      '_blank',
-      'width=1000,height=600,scrollbars=yes,resizable=yes'
-    );
-  };
 
   // Authentication Logic
   const handleLogin = async () => {
@@ -1589,14 +1647,18 @@ function App() {
           <h1 className="text-sm font-black uppercase tracking-tighter text-indigo-900 hidden sm:block">
             My Journal Admin
           </h1>
-          <nav className="flex bg-slate-100 p-1 rounded-xl">
-            {['places', 'map', 'dashboard'].map(t => (
+          <nav className="flex bg-slate-100 p-1 rounded-xl gap-1">
+            {['places', 'social', 'map', 'dashboard'].map(t => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                className={`px-6 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${activeTab === t
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
                   }`}
               >
+                {/* Optional: Add dynamic icon dots for the social tab to make it stand out */}
+                {t === 'social' && <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'social' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />}
                 {t}
               </button>
             ))}
@@ -1874,8 +1936,142 @@ function App() {
           </div>
         )}
 
+        {/* TAB 2: SOCIAL (VIGNETTES FEED) */}
+        {activeTab === 'social' && (
+          <div className="h-full flex flex-col">
+            {/* Filters & Control Header */}
+            <div className="px-8 py-4 bg-white border-b border-slate-100 flex flex-wrap items-center gap-4 shrink-0">
+              <div className="relative">
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search Social Feed"
+                  className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none focus:border-indigo-400 transition-all w-48"
+                />
+              </div>
 
-        {/* TAB 2: MAP */}
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none cursor-pointer hover:bg-slate-100">
+                <option value="All">All Categories</option>
+                {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+
+              <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
+
+              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600">
+                <Icon name="sparkles" className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Verified Feed</span>
+              </div>
+            </div>
+
+            {/* Social Grid */}
+            <div className="flex-1 overflow-y-auto p-8 no-scrollbar bg-slate-50/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 pb-20">
+                {processedPlaces.filter(p => p.status === 'done').map(p => {
+                  // Data extraction from AI Article
+                  const hasArticle = p.ai_article && Object.keys(p.ai_article).length > 0;
+                  const artisticTitle = `✨ ${p.place_name} — Island Vignettes: A Sri Lankan Journal`;
+                  const description = p.ai_article?.story || "Capturing the essence of Sri Lanka's hidden gems through the lens of adventure.";
+
+                  return (
+                    <div key={p.id} className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col group relative hover:shadow-md transition-all">
+
+                      {/* Image Section with Pinterest Hub Overlay */}
+                      <div className="aspect-video bg-slate-100 relative shrink-0 overflow-hidden">
+                        {p.cover_photo_url ? (
+                          <img src={p.cover_photo_url} alt={p.place_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2">
+                            <Icon name="image" className="w-6 h-6" />
+                            <span className="text-[8px] font-black uppercase tracking-widest">No Visuals</span>
+                          </div>
+                        )}
+
+                        {/* Pinterest Pin Hub Overlay - UPDATED FOR 4 IMAGES */}
+                        {activePinHubId === p.id && (
+                          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-20 p-4 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-200">
+                            <button onClick={() => setActivePinHubId(null)} className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-600">
+                              <Icon name="x" className="w-4 h-4" />
+                            </button>
+
+                            <div className="bg-rose-50 p-2 rounded-full mb-2">
+                              <Icon name="heart" className="w-5 h-5 text-rose-500" />
+                            </div>
+
+                            <p className="text-[10px] font-black uppercase text-slate-800 mb-1 text-center">Pinterest Amplify</p>
+
+                            {/* 4-Image Grid for Pinterest selection */}
+                            <div className="grid grid-cols-2 gap-2 w-full max-w-[160px]">
+                              {/* 1. Cover Image Slot (Index 0) */}
+                              {p.cover_photo_url && (
+                                <button
+                                  onClick={() => pinIndividualImage(p.cover_photo_url, 0, p)}
+                                  className="py-2 bg-rose-600 text-white text-[7px] font-black uppercase rounded-lg shadow-md hover:bg-rose-700 active:scale-95 transition-all"
+                                >
+                                  Cover Pin
+                                </button>
+                              )}
+
+                              {/* 2-4. Gallery Image Slots (Indices 1, 2, 3) */}
+                              {(Array.isArray(p.album_photos) ? p.album_photos : []).slice(0, 3).map((img, idx) => (
+                                <button
+                                  key={`${p.id}-pin-${idx}`}
+                                  onClick={() => pinIndividualImage(img, idx + 1, p)}
+                                  className="py-2 bg-slate-800 text-white text-[7px] font-black uppercase rounded-lg hover:bg-slate-900 active:scale-95 transition-all"
+                                >
+                                  Asset {idx + 1}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Body: Artistic Details */}
+                      <div className="p-4 flex-1 flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] font-black uppercase text-indigo-500 tracking-widest px-2 py-0.5 bg-indigo-50 rounded-md">
+                            {p.category}
+                          </span>
+                          {hasArticle && <Icon name="sparkles" className="w-2.5 h-2.5 text-amber-400" />}
+                        </div>
+
+                        <h3 className="text-[11px] font-black uppercase text-slate-800 leading-tight">
+                          {artisticTitle}
+                        </h3>
+                        <p className="text-[10px] font-bold text-slate-400 line-clamp-3 leading-relaxed italic">
+                          "{description}"
+                        </p>
+                      </div>
+
+                      {/* Action Footer: Social Share Buttons */}
+                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => handleFlipboardShare(p)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm"
+                        >
+                          <Icon name="refresh-cw" className="w-3 h-3" />
+                          <span className="text-[9px] font-black uppercase">Flipboard</span>
+                        </button>
+
+                        <button
+                          onClick={() => setActivePinHubId(p.id)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
+                        >
+                          <Icon name="heart" className="w-3 h-3" />
+                          <span className="text-[9px] font-black uppercase">Pinterest</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* TAB 3: MAP */}
+
         <div className={`flex h-full w-full ${activeTab === 'map' ? 'flex' : 'hidden'} flex-col md:flex-row overflow-hidden`}>
 
           {/* MAP CONTAINER - Top on Mobile (40%), Right on Desktop */}
@@ -2063,7 +2259,8 @@ function App() {
           </aside>
         </div>
 
-        {/* TAB 3: DASHBOARD */}
+        {/* TAB 4: DASHBOARD */}
+
         {activeTab === 'dashboard' && (
           <div className="h-full w-full overflow-y-auto p-8 no-scrollbar bg-slate-50">
 
