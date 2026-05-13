@@ -1442,6 +1442,9 @@ function App() {
         }
         else if (lowerUA.includes('elakiri')) {
           finalSource = 'Elakiri';
+          
+        } else if (lowerUA.includes('twitter')) {
+          finalSource = 'Twitter (X)';
         }
         else if (lowerUA.includes('flipboard')) {
           finalSource = 'Flipboard';
