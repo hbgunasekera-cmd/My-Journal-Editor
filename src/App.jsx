@@ -535,41 +535,54 @@ function App() {
 
   // --- Social Sharing Logic (Add this inside your App component) ---
 
-  const handleFlipboardShare = (p) => {
-    if (!p) return;
+  const handleFlipboardShare = async (p) => {
+  if (!p) return;
 
-    const locationName = p.place_name || "New Discovery";
-    const baseUrl = "https://my-journal-view.vercel.app";
+  const locationName = p.place_name || "New Discovery";
+  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-    // Use a cache-buster (?t=) to force Flipboard to re-scrape if you've updated the image
-    const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&t=${Date.now()}`;
+  // --- 1. TIDY 20-WORD DESCRIPTION ---
+  let shortDesc = "";
+  const storyText = p.ai_article?.story || p.ai_article?.description || "";
+  if (storyText) {
+    // Get first sentence, clean markdown, cap at 120 chars
+    shortDesc = storyText.replace(/[#*]/g, '').split('.')[0].trim() + '.';
+    if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 117) + "...";
+  } else {
+    shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+  }
 
-    // --- TIDY 20-WORD DESCRIPTION ---
-    let shortDesc = "";
-    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+  // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
+  const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+  const fullTextToCopy = `${locationName} | ${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
 
-    if (storyText) {
-      // Get first sentence + Clean Markdown
-      shortDesc = storyText.replace(/[#*]/g, '').split('.')[0].trim() + '.';
-      if (shortDesc.length > 140) shortDesc = shortDesc.substring(0, 137) + "...";
-    } else {
-      shortDesc = `Discovering the untouched beauty of ${locationName} in Sri Lanka.`;
+  // --- 3. EXECUTE COPY TO CLIPBOARD ---
+  try {
+    await navigator.clipboard.writeText(fullTextToCopy);
+    // Visual feedback using your app's toast system
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: "Caption copied! Paste in Flipboard box." });
+      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
     }
+  } catch (err) {
+    console.error("Clipboard failed", err);
+  }
 
-    // --- ARTISTIC CAPTION ---
-    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
-    const fullTitle = `${locationName} | ${shortDesc} ${hashtags}`;
+  // --- 4. OPEN FLIPBOARD (TARGET THE IMAGE) ---
+  // We use the cover image as the URL so Flipboard 100% grabs the photo
+  // and doesn't show a 404 or your site logo.
+  const targetUrl = p.cover_photo_url || shareLink;
+  
+  const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2` + 
+                       `&url=${encodeURIComponent(targetUrl)}` + 
+                       `&title=${encodeURIComponent(locationName)}`;
 
-    // --- THE FIX: FLIPIT ENDPOINT ---
-    // Using 'flipit/flip' with 'ext_img' is the only way to override the site logo
-    const flipboardUrl = `https://share.flipboard.com/flipit/flip?v=2&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(fullTitle)}&ext_img=${encodeURIComponent(p.cover_photo_url || '')}`;
-
-    window.open(
-      flipboardUrl,
-      'flipboard-share',
-      'width=1000,height=600,scrollbars=yes,resizable=yes'
-    );
-  };
+  window.open(
+    flipboardUrl, 
+    'flipboard-share', 
+    'width=700,height=680,scrollbars=yes,resizable=yes'
+  );
+};
 
   const pinIndividualImage = (imageUrl, index, p) => {
     if (!p) return;
