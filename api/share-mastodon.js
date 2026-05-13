@@ -3,48 +3,45 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { tootText, coverImageUrl, locationName } = req.body;
+  
+  // This looks for the PRIVATE key (no VITE_ prefix)
   const accessToken = process.env.MASTODON_ACCESS_TOKEN;
 
   if (!accessToken) {
-    return res.status(500).json({ error: "MASTODON_ACCESS_TOKEN not found in Vercel environment." });
+    return res.status(500).json({ error: "MASTODON_ACCESS_TOKEN is missing in Vercel Backend Settings." });
   }
 
   try {
     let mediaIds = [];
 
-    // 1. PROCESS IMAGE
+    // 1. UPLOAD IMAGE
     if (coverImageUrl) {
       try {
         const imageResp = await fetch(coverImageUrl);
-        if (!imageResp.ok) throw new Error(`Failed to fetch image: ${imageResp.statusText}`);
-        
-        const arrayBuffer = await imageResp.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
+        if (imageResp.ok) {
+          const arrayBuffer = await imageResp.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
 
-        // Mastodon requires a Multipart form with a filename
-        const formData = new FormData();
-        const fileBlob = new Blob([uint8Array], { type: 'image/jpeg' });
-        
-        // The third argument 'cover.jpg' is MANDATORY for Mastodon validation
-        formData.append('file', fileBlob, 'cover.jpg');
-        formData.append('description', `Scenic view of ${locationName}`);
+          const formData = new FormData();
+          const fileBlob = new Blob([buffer], { type: 'image/jpeg' });
+          
+          // Filename 'cover.jpg' is required for Mastodon's validation
+          formData.append('file', fileBlob, 'cover.jpg');
+          formData.append('description', `Landscape view of ${locationName}`);
 
-        const mediaUpload = await fetch('https://mastodon.social/api/v1/media', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${accessToken}` },
-          body: formData,
-        });
+          const mediaUpload = await fetch('https://mastodon.social/api/v1/media', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+            body: formData,
+          });
 
-        if (mediaUpload.ok) {
-          const mediaData = await mediaUpload.json();
-          mediaIds.push(mediaData.id);
-        } else {
-          const mediaErr = await mediaUpload.json();
-          console.error("Mastodon Media API Error:", mediaErr);
-          // If media fails, we still want to try posting the text
+          if (mediaUpload.ok) {
+            const mediaData = await mediaUpload.json();
+            mediaIds.push(mediaData.id);
+          }
         }
-      } catch (imgErr) {
-        console.error("Image Processing Failed:", imgErr.message);
+      } catch (e) {
+        console.error("Image Proxy Error:", e.message);
       }
     }
 
@@ -63,15 +60,9 @@ export default async function handler(req, res) {
     });
 
     const result = await statusResp.json();
-
-    if (!statusResp.ok) {
-      return res.status(statusResp.status).json(result);
-    }
-
-    return res.status(200).json(result);
+    return res.status(statusResp.ok ? 200 : statusResp.status).json(result);
 
   } catch (error) {
-    console.error("Proxy Global Error:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: error.message });
   }
 }
