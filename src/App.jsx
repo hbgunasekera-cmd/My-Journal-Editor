@@ -541,29 +541,29 @@ function App() {
     const locationName = p.place_name || "New Discovery";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-    // --- 1. FULL ARTICLE DESCRIPTION ---
-    let fullDesc = "";
+    // --- 1. FIRST PARAGRAPH EXTRACTION ---
+    let shortDesc = "";
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
     
     if (storyText) {
-      // Remove basic markdown elements (like # and *) but keep the entire text
-      fullDesc = storyText.replace(/[#*]/g, '').trim();
+      // Split the text by double newlines to isolate the first paragraph, then clean markdown
+      shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
     } else {
       // Fallback if AI article hasn't been generated yet
-      fullDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
     }
 
     // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
     const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
-    // Formatted with line breaks so the long article reads nicely when pasted
-    const fullTextToCopy = `${locationName}\n\n${fullDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
+    // Formatted cleanly with line breaks
+    const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
 
     // --- 3. EXECUTE COPY TO CLIPBOARD ---
     try {
       await navigator.clipboard.writeText(fullTextToCopy);
       // Visual feedback using your app's toast system
       if (typeof setToast === 'function') {
-        setToast({ show: true, msg: "Full article copied! Paste in Flipboard box." });
+        setToast({ show: true, msg: "First paragraph copied! Paste in Flipboard box." });
         setTimeout(() => setToast({ show: false, msg: "" }), 3000);
       }
     } catch (err) {
