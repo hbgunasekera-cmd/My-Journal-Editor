@@ -623,28 +623,40 @@ function App() {
 const handleMastodonShare = async (p) => {
   if (!p) return;
 
+  // 1. CONTENT SETUP
   const locationName = p.place_name || "New Discovery";
   const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
   const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
   
-  // 1. Extract first paragraph
-  let storyText = p.ai_article?.story || p.ai_article?.description || "";
+  // --- EXTRACT FIRST PARAGRAPH (Flipboard Method) ---
+  const storyText = p.ai_article?.story || p.ai_article?.description || "";
   let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-  // 2. Word-safe truncation (500 limit)
-  const reservedLength = locationName.length + shareLink.length + hashtags.length + 30;
-  const maxSpace = 500 - reservedLength;
+  // --- TARGETED CHARACTER LIMIT ---
+  // Mastodon Hard Limit: 500. 
+  // We aim for ~250 chars of article text to keep the post clean and safe.
+  const targetDescLimit = 250; 
 
-  if (shortDesc.length > maxSpace) {
-    let temp = shortDesc.substring(0, maxSpace - 3);
-    const lastSpace = temp.lastIndexOf(" ");
-    shortDesc = (lastSpace > 0 ? temp.substring(0, lastSpace) : temp) + "...";
+  if (shortDesc.length > targetDescLimit) {
+    // Cut at the target limit
+    let tempDesc = shortDesc.substring(0, targetDescLimit);
+    
+    // BACKTRACK to the last period to ensure a complete sentence
+    const lastPeriod = tempDesc.lastIndexOf(".");
+    
+    if (lastPeriod > 100) { // Ensure the sentence isn't too tiny
+      shortDesc = tempDesc.substring(0, lastPeriod + 1);
+    } else {
+      // Fallback: Cut at the last full word
+      const lastSpace = tempDesc.lastIndexOf(" ");
+      shortDesc = (lastSpace > 0 ? tempDesc.substring(0, lastSpace) : tempDesc) + "...";
+    }
   }
 
-  const tootText = `${locationName}\n\n${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
+  const tootText = `${locationName}\n\n${shortDesc}\n\n 🔗 Web: ${shareLink}\n\n${hashtags}`;
 
+  // 2. CALL PROXY
   try {
-    // Note: Ensure your local dev server is proxying /api/ to Vercel or use full URL if testing locally
     const response = await fetch('/api/share-mastodon', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -655,20 +667,12 @@ const handleMastodonShare = async (p) => {
       }),
     });
 
-    const data = await response.json();
-
     if (response.ok) {
-      setToast?.({ show: true, msg: "Successfully shared to Mastodon!" });
+      setToast?.({ show: true, msg: "Shared to Mastodon (250-char limit)!" });
       setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
-    } else {
-      // Log the actual error from the backend
-      console.error("Proxy Error Response:", data);
-      throw new Error(data.error || "Proxy failed to share");
     }
   } catch (err) {
-    console.error("Mastodon Share Error:", err);
-    setToast?.({ show: true, msg: `Mastodon: ${err.message}` });
-    setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
+    console.error("Mastodon Error:", err);
   }
 };
 
