@@ -568,9 +568,8 @@ function App() {
     console.error("Clipboard failed", err);
   }
 
-  // --- 4. OPEN FLIPBOARD (TARGET THE IMAGE) ---
-  // We use the cover image as the URL so Flipboard 100% grabs the photo
-  // and doesn't show a 404 or your site logo.
+  // --- 4. OPEN FLIPBOARD ---
+
   const targetUrl = p.cover_photo_url || shareLink;
   
   const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2` + 
@@ -1417,13 +1416,14 @@ function App() {
       if (finalSource === "Direct") {
         if (lowerUA.includes('fban') || lowerUA.includes('fbav')) finalSource = 'Facebook (App)';
         else if (lowerUA.includes('instagram')) finalSource = 'Instagram (App)';
-        else if (lowerUA.includes('tiktok')) finalSource = 'TikTok (App)';
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) finalSource = 'TikTok (App)';
         else if (lowerUA.includes('messenger') || lowerUA.includes('fb_iab')) finalSource = 'Messenger';
         else if (lowerUA.includes('whatsapp')) finalSource = 'WhatsApp';
         else if (lowerUA.includes('reddit')) finalSource = 'Reddit (App)';
         else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) finalSource = 'YouTube (App)';
         else if (lowerUA.includes('pinterest')) finalSource = 'Pinterest';
         else if (lowerUA.includes('elakiri')) finalSource = 'Elakiri';
+        else if (lowerUA.includes('flipboard')) finalSource = 'Flipboard';
       }
 
       return { type, source: finalSource, os, isBot, loyaltyStatus };
