@@ -9,7 +9,6 @@ const supabase = createClient(
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -23,13 +22,12 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ error: error.message });
 
   const rssItems = places.map(place => {
-    // Pinterest likes a clean link. Adding a timestamp help Pinterest see it as "new"
-    const itemUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&t=${new Date(place.created_at).getTime()}`;
+    const itemUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}`;
     const escapedUrl = itemUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
     
     const storyText = place.ai_article?.story 
-      ? place.ai_article.story.trim().substring(0, 450) // Pinterest description limit is ~500 chars
+      ? place.ai_article.story.trim().substring(0, 450) 
       : `Explore ${place.place_name} in Sri Lanka.`;
     
     return `
@@ -40,16 +38,12 @@ export default async function handler(req, res) {
         <pubDate>${new Date(place.created_at).toUTCString()}</pubDate>
         <description><![CDATA[${storyText}]]></description>
         
-        <!-- Standard Image tag for simple readers -->
-        <image>${escapedMediaUrl}</image>
-
-        <!-- Pinterest / Media tag (CRITICAL) -->
+        <enclosure url="${escapedMediaUrl}" length="0" type="image/jpeg" />
+        
         <media:content url="${escapedMediaUrl}" medium="image">
            <media:title type="plain"><![CDATA[${place.place_name}]]></media:title>
+           <media:credit role="photographer">Hasitha Gunasekera</media:credit>
         </media:content>
-
-        <!-- Fallback for Pinterest's older scrapers -->
-        <enclosure url="${escapedMediaUrl}" length="0" type="image/jpeg" />
       </item>`;
   }).join('');
 
@@ -62,7 +56,9 @@ export default async function handler(req, res) {
       <channel>
         <title>My Journal | Sri Lanka Travel Photography</title>
         <link>https://my-journal-view.vercel.app/</link>
+        <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
         <description>Cinematic travel photography from Sri Lanka.</description>
+        <language>en-us</language>
         <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
         ${rssItems}
       </channel>
