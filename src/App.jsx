@@ -544,7 +544,7 @@ function App() {
     // --- 1. FIRST PARAGRAPH EXTRACTION ---
     let shortDesc = "";
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
-    
+
     if (storyText) {
       // Split the text by double newlines to isolate the first paragraph, then clean markdown
       shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
@@ -612,13 +612,114 @@ function App() {
     }
 
     const hashtagString = "#MyJournal #SriLanka #Travel #IslandVibes";
-    const finalDescription = `${shortDesc}\n\n📍 ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
+    const finalDescription = `${shortDesc}\n\n 🔗 Web  ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
 
     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
 
     window.open(pinterestUrl, '_blank', 'width=750,height=600');
     if (typeof setActivePinHubId === 'function') setActivePinHubId(null);
   };
+
+const handleMastodonShare = async (p) => {
+  if (!p) return;
+
+  // Helper for internal toast calls
+  const notify = (msg) => {
+    if (typeof triggerToast === 'function') triggerToast(msg);
+    else if (typeof setToast === 'function') {
+      setToast({ show: true, msg });
+      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+    }
+  };
+
+  try {
+    // 1. Content Preparation
+    const locationName = p.place_name || "New Discovery";
+    const shareLink = "https://my-journal-view.vercel.app"; // Main website link
+    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+    const coverImageUrl = p.cover_photo_url || "";
+
+    // 2. Paragraph Extraction
+    let storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText 
+      ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, "").trim() 
+      : `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+
+    // 3. Truncation (500 Char Limit)
+    const reserved = locationName.length + shareLink.length + hashtags.length + 40;
+    const maxText = 500 - reserved;
+
+    if (shortDesc.length > maxText) {
+      let cut = shortDesc.substring(0, maxText);
+      const lastSentence = cut.lastIndexOf(". ");
+      shortDesc = (lastSentence > 80) 
+        ? cut.substring(0, lastSentence + 1) 
+        : cut.substring(0, cut.lastIndexOf(" ")) + "...";
+    }
+
+    const tootText = `${locationName}\n\n${shortDesc}\n\n🔗 Web: ${shareLink}\n\n${hashtags}`;
+
+    // 4. API Configuration
+    const accessToken = import.meta.env.VITE_MASTODON_ACCESS_TOKEN;
+    if (!accessToken) throw new Error("Missing Access Token");
+
+    const authHeader = { Authorization: `Bearer ${accessToken}` };
+    let mediaIds = [];
+
+    // 5. Media Upload (Remote URL Method)
+    if (coverImageUrl) {
+      try {
+        const formData = new FormData();
+        formData.append("url", coverImageUrl);
+        formData.append("description", `Scenic view of ${locationName}, Sri Lanka`);
+
+        const mediaResp = await fetch("https://mastodon.social/api/v2/media", {
+          method: "POST",
+          headers: authHeader,
+          body: formData
+        });
+
+        if (!mediaResp.ok) throw new Error(await mediaResp.text());
+        const mediaData = await mediaResp.json();
+        const mediaId = mediaData.id;
+
+        // Poll for processing completion
+        for (let i = 0; i < 10; i++) {
+          const check = await fetch(`https://mastodon.social/api/v1/media/${mediaId}`, { headers: authHeader });
+          const status = await check.json();
+          
+          if (!status.processing && (status.url || status.preview_url)) {
+            mediaIds.push(mediaId);
+            break;
+          }
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      } catch (mediaErr) {
+        console.error("Image Upload Failed:", mediaErr);
+        notify("Image upload failed — posting text only");
+      }
+    }
+
+    // 6. Post Status
+    const response = await fetch("https://mastodon.social/api/v1/statuses", {
+      method: "POST",
+      headers: { ...authHeader, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: tootText,
+        media_ids: mediaIds,
+        visibility: "public"
+      })
+    });
+
+    if (!response.ok) throw new Error(await response.text());
+
+    notify(mediaIds.length > 0 ? "Posted to Mastodon with image!" : "Posted to Mastodon!");
+
+  } catch (err) {
+    console.error("MASTODON ERROR:", err);
+    notify(`Mastodon failed: ${err.message}`);
+  }
+};
 
 
   const triggerToast = (msg) => {
@@ -1443,12 +1544,16 @@ function App() {
         }
         else if (lowerUA.includes('elakiri')) {
           finalSource = 'Elakiri';
-
-        } else if (lowerUA.includes('twitter')) {
+        }
+        else if (lowerUA.includes('twitter') || lowerUA.includes('x.com')) {
           finalSource = 'Twitter(X)';
         }
         else if (lowerUA.includes('flipboard')) {
           finalSource = 'Flipboard';
+        }
+        // 3. Fediverse / Mastodon Detection
+        else if (lowerUA.includes('mastodon') || lowerUA.includes('ivory') || lowerUA.includes('tusky')) {
+          finalSource = 'Mastodon';
         }
       }
 
@@ -2105,23 +2210,36 @@ function App() {
                       </div>
 
                       {/* Action Footer: Social Share Buttons */}
-                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 flex items-center justify-between gap-2">
+                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 flex items-center justify-between gap-1.5">
+                        {/* Flipboard Button */}
                         <button
-                          onClick={() => handleFlipboardShare(p)} // Must pass 'p' here
-                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                          onClick={() => handleFlipboardShare(p)}
+                          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
                         >
-                          <Icon name="refresh-cw" className="w-3 h-3" />
-                          <span className="text-[9px] font-black uppercase">Flipboard</span>
+                          <Icon name="refresh-cw" className="w-3.5 h-3.5" />
+                          <span className="text-[8px] font-black uppercase tracking-tighter">Flipboard</span>
                         </button>
 
+                        {/* Mastodon Button */}
+                        <button
+                          onClick={() => handleMastodonShare(p)}
+                          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-[#2b90d9] hover:text-white hover:border-[#2b90d9] transition-all shadow-sm group"
+                        >
+                          <Icon name="share-2" className="w-3.5 h-3.5 text-[#2b90d9] group-hover:text-white" />
+                          <span className="text-[8px] font-black uppercase tracking-tighter">Mastodon</span>
+                        </button>
+
+                        {/* Pinterest/PinHub Button */}
                         <button
                           onClick={() => setActivePinHubId(p.id)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
+                          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
                         >
-                          <Icon name="heart" className="w-3 h-3" />
-                          <span className="text-[9px] font-black uppercase">Pinterest</span>
+                          <Icon name="heart" className="w-3.5 h-3.5" />
+                          <span className="text-[8px] font-black uppercase tracking-tighter">Pinterest</span>
                         </button>
                       </div>
+
+
                     </div>
                   );
                 })}
