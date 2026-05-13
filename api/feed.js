@@ -7,59 +7,52 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // 1. CORS & Security
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 2. Data Fetching
   const { data: places, error } = await supabase
     .from('travel_bucket_list') 
-    .select(`id, place_name, created_at, cover_photo_url, ai_article, status, tags`) // Added 'tags' for Mastodon hashtags
+    .select(`id, place_name, created_at, cover_photo_url, ai_article, status`)
     .eq('status', 'done') 
     .order('created_at', { ascending: false })
     .limit(25);
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // 3. Construct RSS Items
   const rssItems = places.map(place => {
-    const itemUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&utm_source=mastodon_rss`;
+    // Pinterest likes a clean link. Adding a timestamp help Pinterest see it as "new"
+    const itemUrl = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(place.place_name)}&t=${new Date(place.created_at).getTime()}`;
     const escapedUrl = itemUrl.replace(/&/g, '&amp;');
     const escapedMediaUrl = (place.cover_photo_url || "").replace(/&/g, '&amp;');
     
-    // Formatting Tags for MastoFeed (category tags become hashtags)
-    // If you don't have a tags column, we'll use defaults
-    const categories = place.tags && Array.isArray(place.tags) 
-      ? place.tags.map(t => `<category>${t}</category>`).join('')
-      : `<category>Travel</category><category>SriLanka</category><category>Photography</category>`;
-
     const storyText = place.ai_article?.story 
-      ? place.ai_article.story.trim() 
-      : `Explore the beauty of ${place.place_name} in Sri Lanka.`;
-    
-    const fullDescription = `${storyText} \n\n© My Journal | Hasitha Gunasekera.`;
+      ? place.ai_article.story.trim().substring(0, 450) // Pinterest description limit is ~500 chars
+      : `Explore ${place.place_name} in Sri Lanka.`;
     
     return `
       <item>
-        <title><![CDATA[${place.place_name}]]></title>
+        <title><![CDATA[${place.place_name} | Sri Lanka Travel]]></title>
         <link>${escapedUrl}</link>
-        <guid isPermaLink="true">${escapedUrl}</guid>
+        <guid isPermaLink="false">${place.id}</guid>
         <pubDate>${new Date(place.created_at).toUTCString()}</pubDate>
-        <dc:creator>Hasitha Gunasekera</dc:creator>
-        <description><![CDATA[${fullDescription}]]></description>
-        ${categories}
-        <enclosure url="${escapedMediaUrl}" length="0" type="image/jpeg" />
-        <media:content url="${escapedMediaUrl}" medium="image" width="1200" height="800">
+        <description><![CDATA[${storyText}]]></description>
+        
+        <!-- Standard Image tag for simple readers -->
+        <image>${escapedMediaUrl}</image>
+
+        <!-- Pinterest / Media tag (CRITICAL) -->
+        <media:content url="${escapedMediaUrl}" medium="image">
            <media:title type="plain"><![CDATA[${place.place_name}]]></media:title>
-           <media:credit role="photographer">Hasitha Gunasekera</media:credit>
         </media:content>
+
+        <!-- Fallback for Pinterest's older scrapers -->
+        <enclosure url="${escapedMediaUrl}" length="0" type="image/jpeg" />
       </item>`;
   }).join('');
 
-  // 4. Construct the Full RSS XML
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
     <rss version="2.0" 
          xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -69,16 +62,12 @@ export default async function handler(req, res) {
       <channel>
         <title>My Journal | Sri Lanka Travel Photography</title>
         <link>https://my-journal-view.vercel.app/</link>
-        <atom:link href="https://my-journal-editor.vercel.app/api/feed" rel="self" type="application/rss+xml" />
-        <description>Cinematic travel stories from Sri Lanka by Hasitha Gunasekera.</description>
-        <language>en-us</language>
+        <description>Cinematic travel photography from Sri Lanka.</description>
         <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
         ${rssItems}
       </channel>
     </rss>`;
 
-  // 5. Headers & Delivery
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate'); 
   res.setHeader('Content-Type', 'application/xml; charset=utf-8'); 
   res.status(200).send(rssFeed.trim());
 }
