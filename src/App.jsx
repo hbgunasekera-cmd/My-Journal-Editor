@@ -623,15 +623,15 @@ function App() {
 const handleMastodonShare = async (p) => {
   if (!p) return;
 
-  // 1. DATA PREP (Flipboard Method)
   const locationName = p.place_name || "New Discovery";
   const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
   const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
   
+  // 1. Extract first paragraph
   let storyText = p.ai_article?.story || p.ai_article?.description || "";
   let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-  // 2. WORD-SAFE TRUNCATION
+  // 2. Word-safe truncation (500 limit)
   const reservedLength = locationName.length + shareLink.length + hashtags.length + 30;
   const maxSpace = 500 - reservedLength;
 
@@ -641,10 +641,10 @@ const handleMastodonShare = async (p) => {
     shortDesc = (lastSpace > 0 ? temp.substring(0, lastSpace) : temp) + "...";
   }
 
-  const tootText = `${locationName}\n\n${shortDesc}\n\n 🔗 Web : ${shareLink}\n\n${hashtags}`;
+  const tootText = `${locationName}\n\n${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
 
-  // 3. CALL YOUR NEW BACKEND PROXY
   try {
+    // Note: Ensure your local dev server is proxying /api/ to Vercel or use full URL if testing locally
     const response = await fetch('/api/share-mastodon', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -655,15 +655,20 @@ const handleMastodonShare = async (p) => {
       }),
     });
 
+    const data = await response.json();
+
     if (response.ok) {
-      setToast?.({ show: true, msg: "Shared with location photo via Proxy!" });
+      setToast?.({ show: true, msg: "Successfully shared to Mastodon!" });
       setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     } else {
-      throw new Error("Proxy failed to share");
+      // Log the actual error from the backend
+      console.error("Proxy Error Response:", data);
+      throw new Error(data.error || "Proxy failed to share");
     }
   } catch (err) {
-    console.error("Mastodon Error:", err);
-    setToast?.({ show: true, msg: "Post failed. Check console." });
+    console.error("Mastodon Share Error:", err);
+    setToast?.({ show: true, msg: `Mastodon: ${err.message}` });
+    setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
   }
 };
 
