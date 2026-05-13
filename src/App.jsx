@@ -533,7 +533,7 @@ function App() {
     return { artisticTitle, description };
   };
 
-  // --- Social Sharing Logic (Add this inside your App component) ---
+  // --- Social Sharing Logic ---
 
   const handleFlipboardShare = async (p) => {
     if (!p) return;
@@ -541,27 +541,29 @@ function App() {
     const locationName = p.place_name || "New Discovery";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-    // --- 1. TIDY 20-WORD DESCRIPTION ---
-    let shortDesc = "";
+    // --- 1. FULL ARTICLE DESCRIPTION ---
+    let fullDesc = "";
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    
     if (storyText) {
-      // Get first sentence, clean markdown, cap at 120 chars
-      shortDesc = storyText.replace(/[#*]/g, '').split('.')[0].trim() + '.';
-      if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 117) + "...";
+      // Remove basic markdown elements (like # and *) but keep the entire text
+      fullDesc = storyText.replace(/[#*]/g, '').trim();
     } else {
-      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+      // Fallback if AI article hasn't been generated yet
+      fullDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
     }
 
     // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
     const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
-    const fullTextToCopy = `${locationName} | ${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
+    // Formatted with line breaks so the long article reads nicely when pasted
+    const fullTextToCopy = `${locationName}\n\n${fullDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
 
     // --- 3. EXECUTE COPY TO CLIPBOARD ---
     try {
       await navigator.clipboard.writeText(fullTextToCopy);
       // Visual feedback using your app's toast system
       if (typeof setToast === 'function') {
-        setToast({ show: true, msg: "Caption copied! Paste in Flipboard box." });
+        setToast({ show: true, msg: "Full article copied! Paste in Flipboard box." });
         setTimeout(() => setToast({ show: false, msg: "" }), 3000);
       }
     } catch (err) {
@@ -569,7 +571,6 @@ function App() {
     }
 
     // --- 4. OPEN FLIPBOARD ---
-
     const targetUrl = p.cover_photo_url || shareLink;
 
     const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2` +
