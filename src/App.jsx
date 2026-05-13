@@ -668,7 +668,7 @@ const handleMastodonShare = async (p) => {
     });
 
     if (response.ok) {
-      setToast?.({ show: true, msg: "Shared to Mastodon (250-char limit)!" });
+      setToast?.({ show: true, msg: "Shared to Mastodon!" });
       setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     }
   } catch (err) {
