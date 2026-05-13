@@ -536,52 +536,52 @@ function App() {
   // --- Social Sharing Logic (Add this inside your App component) ---
 
   const handleFlipboardShare = async (p) => {
-  if (!p) return;
+    if (!p) return;
 
-  const locationName = p.place_name || "New Discovery";
-  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const locationName = p.place_name || "New Discovery";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-  // --- 1. TIDY 20-WORD DESCRIPTION ---
-  let shortDesc = "";
-  const storyText = p.ai_article?.story || p.ai_article?.description || "";
-  if (storyText) {
-    // Get first sentence, clean markdown, cap at 120 chars
-    shortDesc = storyText.replace(/[#*]/g, '').split('.')[0].trim() + '.';
-    if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 117) + "...";
-  } else {
-    shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
-  }
-
-  // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
-  const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
-  const fullTextToCopy = `${locationName} | ${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
-
-  // --- 3. EXECUTE COPY TO CLIPBOARD ---
-  try {
-    await navigator.clipboard.writeText(fullTextToCopy);
-    // Visual feedback using your app's toast system
-    if (typeof setToast === 'function') {
-      setToast({ show: true, msg: "Caption copied! Paste in Flipboard box." });
-      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+    // --- 1. TIDY 20-WORD DESCRIPTION ---
+    let shortDesc = "";
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    if (storyText) {
+      // Get first sentence, clean markdown, cap at 120 chars
+      shortDesc = storyText.replace(/[#*]/g, '').split('.')[0].trim() + '.';
+      if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 117) + "...";
+    } else {
+      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
     }
-  } catch (err) {
-    console.error("Clipboard failed", err);
-  }
 
-  // --- 4. OPEN FLIPBOARD ---
+    // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
+    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+    const fullTextToCopy = `${locationName} | ${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
 
-  const targetUrl = p.cover_photo_url || shareLink;
-  
-  const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2` + 
-                       `&url=${encodeURIComponent(targetUrl)}` + 
-                       `&title=${encodeURIComponent(locationName)}`;
+    // --- 3. EXECUTE COPY TO CLIPBOARD ---
+    try {
+      await navigator.clipboard.writeText(fullTextToCopy);
+      // Visual feedback using your app's toast system
+      if (typeof setToast === 'function') {
+        setToast({ show: true, msg: "Caption copied! Paste in Flipboard box." });
+        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+      }
+    } catch (err) {
+      console.error("Clipboard failed", err);
+    }
 
-  window.open(
-    flipboardUrl, 
-    'flipboard-share', 
-    'width=700,height=680,scrollbars=yes,resizable=yes'
-  );
-};
+    // --- 4. OPEN FLIPBOARD ---
+
+    const targetUrl = p.cover_photo_url || shareLink;
+
+    const flipboardUrl = `https://share.flipboard.com/bookmarklet/popout?v=2` +
+      `&url=${encodeURIComponent(targetUrl)}` +
+      `&title=${encodeURIComponent(locationName)}`;
+
+    window.open(
+      flipboardUrl,
+      'flipboard-share',
+      'width=700,height=680,scrollbars=yes,resizable=yes'
+    );
+  };
 
   const pinIndividualImage = (imageUrl, index, p) => {
     if (!p) return;
@@ -1414,16 +1414,38 @@ function App() {
       let finalSource = taggedSource;
 
       if (finalSource === "Direct") {
-        if (lowerUA.includes('fban') || lowerUA.includes('fbav')) finalSource = 'Facebook (App)';
-        else if (lowerUA.includes('instagram')) finalSource = 'Instagram (App)';
-        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) finalSource = 'TikTok (App)';
-        else if (lowerUA.includes('messenger') || lowerUA.includes('fb_iab')) finalSource = 'Messenger';
-        else if (lowerUA.includes('whatsapp')) finalSource = 'WhatsApp';
-        else if (lowerUA.includes('reddit')) finalSource = 'Reddit (App)';
-        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) finalSource = 'YouTube (App)';
-        else if (lowerUA.includes('pinterest')) finalSource = 'Pinterest';
-        else if (lowerUA.includes('elakiri')) finalSource = 'Elakiri';
-        else if (lowerUA.includes('flipboard')) finalSource = 'Flipboard';
+        // 1. Meta Ecosystem (Priority: Specific Apps > General Facebook)
+        if (lowerUA.includes('messenger') || lowerUA.includes('fb_iab')) {
+          finalSource = 'Messenger';
+        }
+        else if (lowerUA.includes('instagram')) {
+          finalSource = 'Instagram (App)';
+        }
+        else if (lowerUA.includes('fban') || lowerUA.includes('fbav')) {
+          finalSource = 'Facebook (App)';
+        }
+        // 2. Other Apps
+        else if (lowerUA.includes('tiktok') || lowerUA.includes('musical')) {
+          finalSource = 'TikTok (App)';
+        }
+        else if (lowerUA.includes('whatsapp')) {
+          finalSource = 'WhatsApp';
+        }
+        else if (lowerUA.includes('reddit')) {
+          finalSource = 'Reddit (App)';
+        }
+        else if (lowerUA.includes('youtube') || lowerUA.includes('com.google.android.youtube')) {
+          finalSource = 'YouTube (App)';
+        }
+        else if (lowerUA.includes('pinterest')) {
+          finalSource = 'Pinterest';
+        }
+        else if (lowerUA.includes('elakiri')) {
+          finalSource = 'Elakiri';
+        }
+        else if (lowerUA.includes('flipboard')) {
+          finalSource = 'Flipboard';
+        }
       }
 
       return { type, source: finalSource, os, isBot, loyaltyStatus };
