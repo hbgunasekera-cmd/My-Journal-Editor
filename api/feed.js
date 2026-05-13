@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       </item>`;
   }).join('');
 
-  // 4. Construct the Full RSS XML
+  // 4. Construct the Full RSS XML with standard-compliant image handling
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
     <rss version="2.0" 
          xmlns:dc="http://purl.org/dc/elements/1.1/"
