@@ -16,7 +16,7 @@ import {
   CheckCircle, Circle, Navigation2, Home, Sparkles,
   ShieldCheck, Shield, Landmark, LayoutGrid, Video,
   FileText, FileX, RefreshCw, Heart, MessageSquare,
-  ShieldAlert, PlusCircle, HelpCircle
+  ShieldAlert, PlusCircle, HelpCircle, Facebook, Instagram
 } from 'lucide-react';
 
 
@@ -75,6 +75,8 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'file-text': FileText, 'file-x': FileX, 'refresh-cw': RefreshCw,
     'heart': Heart, 'message-square': MessageSquare, 'shield-alert': ShieldAlert,
     'plus-circle': PlusCircle,
+    'facebook': Facebook,
+    'instagram': Instagram,
     // --- Weather Registry Integration ---
     'sun': Sun,
     'cloud': Cloud,
@@ -538,7 +540,7 @@ function App() {
   const handleFlipboardShare = async (p) => {
     if (!p) return;
 
-    const locationName = p.place_name || "New Discovery";
+    const locationName = p.place_name || "Island Vignette";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
     // --- 1. FIRST PARAGRAPH EXTRACTION ---
@@ -587,7 +589,7 @@ function App() {
   const pinIndividualImage = (imageUrl, index, p) => {
     if (!p) return;
 
-    const locationName = p.place_name || "New Discovery";
+    const locationName = p.place_name || "Island Vignette";
     const baseUrl = "https://my-journal-view.vercel.app";
     const shareUrl = `${baseUrl}/?place=${encodeURIComponent(locationName)}&utm_source=pinterest`;
 
@@ -620,59 +622,104 @@ function App() {
     if (typeof setActivePinHubId === 'function') setActivePinHubId(null);
   };
 
-const handleMastodonShare = async (p) => {
+  const handleMastodonShare = async (p) => {
+    if (!p) return;
+
+    // 1. CONTENT SETUP
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+
+    // --- EXTRACT FIRST PARAGRAPH (Flipboard Method) ---
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+
+    // --- TARGETED CHARACTER LIMIT ---
+    // Mastodon Hard Limit: 500. 
+    // We aim for ~250 chars of article text to keep the post clean and safe.
+    const targetDescLimit = 250;
+
+    if (shortDesc.length > targetDescLimit) {
+      // Cut at the target limit
+      let tempDesc = shortDesc.substring(0, targetDescLimit);
+
+      // BACKTRACK to the last period to ensure a complete sentence
+      const lastPeriod = tempDesc.lastIndexOf(".");
+
+      if (lastPeriod > 100) { // Ensure the sentence isn't too tiny
+        shortDesc = tempDesc.substring(0, lastPeriod + 1);
+      } else {
+        // Fallback: Cut at the last full word
+        const lastSpace = tempDesc.lastIndexOf(" ");
+        shortDesc = (lastSpace > 0 ? tempDesc.substring(0, lastSpace) : tempDesc) + "...";
+      }
+    }
+
+    const tootText = `${locationName}\n\n${shortDesc}\n\n 🔗 Web: ${shareLink}\n\n${hashtags}`;
+
+    // 2. CALL PROXY
+    try {
+      const response = await fetch('/api/share-mastodon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tootText,
+          coverImageUrl: p.cover_photo_url,
+          locationName
+        }),
+      });
+
+      if (response.ok) {
+        setToast?.({ show: true, msg: "Shared to Mastodon!" });
+        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+      }
+    } catch (err) {
+      console.error("Mastodon Error:", err);
+    }
+  };
+
+  const handleMetaShare = async (p, platform) => {
   if (!p) return;
 
-  // 1. CONTENT SETUP
-  const locationName = p.place_name || "New Discovery";
+  const locationName = p.place_name || "Island Vignette";
   const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-  const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+  const hashtags = "#MyJournal #SriLanka #Travel";
   
-  // --- EXTRACT FIRST PARAGRAPH (Flipboard Method) ---
+  // Extract first paragraph
   const storyText = p.ai_article?.story || p.ai_article?.description || "";
   let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-  // --- TARGETED CHARACTER LIMIT ---
-  // Mastodon Hard Limit: 500. 
-  // We aim for ~250 chars of article text to keep the post clean and safe.
-  const targetDescLimit = 250; 
+  // Instagram character limit is generous, but keeping it tidy
+  const tootText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
 
-  if (shortDesc.length > targetDescLimit) {
-    // Cut at the target limit
-    let tempDesc = shortDesc.substring(0, targetDescLimit);
-    
-    // BACKTRACK to the last period to ensure a complete sentence
-    const lastPeriod = tempDesc.lastIndexOf(".");
-    
-    if (lastPeriod > 100) { // Ensure the sentence isn't too tiny
-      shortDesc = tempDesc.substring(0, lastPeriod + 1);
-    } else {
-      // Fallback: Cut at the last full word
-      const lastSpace = tempDesc.lastIndexOf(" ");
-      shortDesc = (lastSpace > 0 ? tempDesc.substring(0, lastSpace) : tempDesc) + "...";
-    }
+  // Notify user that the process has started (useful for slower API calls)
+  if (typeof setToast === 'function') {
+    setToast({ show: true, msg: `Publishing to ${platform}...` });
   }
 
-  const tootText = `${locationName}\n\n${shortDesc}\n\n 🔗 Web: ${shareLink}\n\n${hashtags}`;
-
-  // 2. CALL PROXY
   try {
-    const response = await fetch('/api/share-mastodon', {
+    const response = await fetch('/api/share-meta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        tootText,
-        coverImageUrl: p.cover_photo_url,
-        locationName
+        platform: platform,
+        text: tootText,
+        imageUrl: p.cover_photo_url,
+        link: shareLink
       }),
     });
 
     if (response.ok) {
-      setToast?.({ show: true, msg: "Shared to Mastodon!" });
+      setToast?.({ show: true, msg: `Live on ${platform}!` });
       setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+    } else {
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to publish");
     }
   } catch (err) {
-    console.error("Mastodon Error:", err);
+    console.error(`${platform} Error:`, err);
+    setToast?.({ show: true, msg: `Error: ${err.message}` });
+    setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
   }
 };
 
