@@ -860,53 +860,51 @@ function App() {
 */}
 
   const handleTwitterPush = async (p) => {
-  if (!p) return;
+    if (!p) return;
 
-  const locationName = p.place_name || "Island Vignette";
-  // We use the cover photo as the primary share link so Twitter's crawler sees the image first
-  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-  
-  // --- 1. SIMPLE DESCRIPTION ---
-  // Using a short, manual description instead of the long AI article
-  const shortDesc = p.description || `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-  // --- 2. TRUNCATE FOR TWITTER (X) LIMITS ---
-  // Keeping it very tight so the image link is prominent
-  let displayDesc = shortDesc;
-  if (displayDesc.length > 100) {
-    displayDesc = displayDesc.substring(0, 97) + "...";
-  }
+    // 1. SIMPLE DESCRIPTION & IMAGE URL
+    const shortDesc = p.description || `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+    const coverImage = p.cover_photo_url || ""; // Your Location Cover Page URL
 
-  // --- 3. THE TEXT PACKAGE ---
-  const hashtags = "#MyJournal #SriLanka #Travel";
-  
-  /**
-   * NOTE: To show the image as a preview on X, the "shareLink" must have 
-   * Open Graph (OG) tags configured on your Vercel site. 
-   * If it still shows as a link, we include the direct photo URL at the end.
-   */
-  const fullTextToCopy = `${locationName}\n\n${displayDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
-
-  // --- 4. EXECUTE COPY TO CLIPBOARD ---
-  try {
-    await navigator.clipboard.writeText(fullTextToCopy);
-    if (typeof setToast === 'function') {
-      setToast({ show: true, msg: "Details copied! Paste in X." });
-      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+    // 2. TRUNCATE FOR TWITTER (X) LIMITS
+    // We keep the description short to leave room for the links and tags.
+    let displayDesc = shortDesc;
+    if (displayDesc.length > 100) {
+      displayDesc = displayDesc.substring(0, 97) + "...";
     }
-  } catch (err) {
-    console.error("Clipboard failed", err);
-  }
 
-  // --- 5. OPEN TWITTER (X) ---
-  const twitterUrl = `https://twitter.com/intent/tweet`;
+    // 3. THE TEXT PACKAGE (FOR CLIPBOARD)
+    const hashtags = "#MyJournal #SriLanka #Travel";
 
-  window.open(
-    twitterUrl,
-    'twitter-share',
-    'width=600,height=500,scrollbars=yes,resizable=yes'
-  );
-};
+    // We include the coverImage URL at the end. 
+    // If your Vercel site has OG tags, the 'shareLink' will unfurl the image.
+    // If not, X often "unfurls" the last image link in the tweet.
+    const fullTextToCopy = `${locationName}\n\n${displayDesc}\n\n📍 Discover: ${shareLink}\n\n🖼️ Cover: ${coverImage}\n\n${hashtags}`;
+
+    // 4. EXECUTE COPY TO CLIPBOARD
+    try {
+      await navigator.clipboard.writeText(fullTextToCopy);
+      if (typeof setToast === 'function') {
+        setToast({ show: true, msg: "Details + Cover Link copied! Paste in X." });
+        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+      }
+    } catch (err) {
+      console.error("Clipboard failed", err);
+    }
+
+    // 5. OPEN TWITTER (X)
+    // Opening the blank intent so you can paste everything at once.
+    const twitterUrl = `https://twitter.com/intent/tweet`;
+
+    window.open(
+      twitterUrl,
+      'twitter-share',
+      'width=600,height=500,scrollbars=yes,resizable=yes'
+    );
+  };
 
 
   const triggerToast = (msg) => {
