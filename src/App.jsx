@@ -860,58 +860,59 @@ function App() {
 */}
 
   const handleTwitterPush = async (p) => {
-    if (!p) return;
+  if (!p) return;
 
-    const locationName = p.place_name || "Island Vignette";
-    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  // 1. CONTENT SETUP
+  const locationName = p.place_name || "Island Vignette";
+  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  const hashtags = "#MyJournal #SriLanka #Travel";
 
-    // --- 1. FIRST PARAGRAPH EXTRACTION (Same as Flipboard/Mastodon) ---
-    let shortDesc = "";
-    const storyText = p.ai_article?.story || p.ai_article?.description || "";
-    if (storyText) {
-      // Isolate the first paragraph and clean markdown
-      shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
+  // --- EXTRACT FIRST PARAGRAPH (Consistent with Mastodon/Flipboard logic) ---
+  const storyText = p.ai_article?.story || p.ai_article?.description || "";
+  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+
+  // --- X (TWITTER) CHARACTER LIMIT HANDLING ---
+  // We target ~160 chars for description to leave room for Title, Link, and Hashtags
+  const targetLimit = 160;
+  if (shortDesc.length > targetLimit) {
+    let tempDesc = shortDesc.substring(0, targetLimit);
+    const lastPeriod = tempDesc.lastIndexOf(".");
+    // Ensure we don't cut in the middle of a short sentence
+    shortDesc = (lastPeriod > 60) ? tempDesc.substring(0, lastPeriod + 1) : tempDesc + "...";
+  }
+
+  const tweetText = `${locationName}\n\n${shortDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
+
+  // 2. UI FEEDBACK
+  if (typeof setToast === 'function') {
+    setToast({ show: true, msg: "Pushing to X (Processing Image)..." });
+  }
+
+  // 3. SERVER-LEVEL EXECUTION
+  try {
+    const response = await fetch('/api/share-twitter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: tweetText,
+        imageUrl: p.cover_photo_url, // The server will "grab" this URL to upload the binary
+        locationName: locationName
+      }),
+    });
+
+    if (response.ok) {
+      setToast?.({ show: true, msg: "Post live on X!" });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     } else {
-      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+      const errData = await response.json();
+      throw new Error(errData.error || "Twitter API Error");
     }
-
-    // --- 2. TRUNCATE FOR X (280-character limit) ---
-    // We aim for ~160-180 chars to leave room for the title, link, and hashtags
-    if (shortDesc.length > 170) {
-      shortDesc = shortDesc.substring(0, 167) + "...";
-    }
-
-    const hashtags = "#MyJournal #SriLanka #Travel";
-    
-    // --- 3. THE "FLIPBOARD" TARGET URL FIX ---
-    // We use the cover photo as the primary shared URL so Twitter unfurls it as the card image.
-    const targetUrl = p.cover_photo_url || shareLink;
-
-    // --- 4. THE TEXT PACKAGE (FOR CLIPBOARD & INTENT) ---
-    // We put the actual app link in the text so it's still clickable
-    const tweetText = `${locationName}\n\n${shortDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
-
-    // --- 5. EXECUTE COPY TO CLIPBOARD ---
-    try {
-      await navigator.clipboard.writeText(tweetText);
-      if (typeof setToast === 'function') {
-        setToast({ show: true, msg: "Details copied! X is opening..." });
-        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
-      }
-    } catch (err) {
-      console.error("Clipboard failed", err);
-    }
-
-    // --- 6. OPEN TWITTER (X) WITH PRE-FILLED INTENT ---
-    // By passing 'url' as the cover photo, Twitter will prioritize it for the preview card.
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(targetUrl)}`;
-
-    window.open(
-      twitterUrl,
-      'twitter-share',
-      'width=600,height=500,scrollbars=yes,resizable=yes'
-    );
-  };
+  } catch (err) {
+    console.error("X Push Error:", err);
+    setToast?.({ show: true, msg: `X Push Failed: ${err.message}` });
+    setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
+  }
+};
 
 
   const triggerToast = (msg) => {
