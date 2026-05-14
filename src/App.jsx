@@ -864,40 +864,47 @@ function App() {
 
     const locationName = p.place_name || "Island Vignette";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    
-    // --- 1. USE SMALL DESCRIPTION (Manual field, no AI Story) ---
-    const shortDesc = p.description || `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
-    
-    // --- 2. PREPARE COVER IMAGE (The Flipboard/Mastodon Method) ---
-    const targetUrl = p.cover_photo_url || shareLink;
 
-    // --- 3. TRUNCATE FOR X (280 Character Limit) ---
-    // We keep the description tight to leave room for the links and tags.
-    let displayDesc = shortDesc;
-    if (displayDesc.length > 140) {
-      displayDesc = displayDesc.substring(0, 137) + "...";
+    // --- 1. FIRST PARAGRAPH EXTRACTION (Same as Flipboard/Mastodon) ---
+    let shortDesc = "";
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    if (storyText) {
+      // Isolate the first paragraph and clean markdown
+      shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
+    } else {
+      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
     }
 
-    // --- 4. THE TEXT PACKAGE (FOR CLIPBOARD) ---
-    // Note: We remove the cover image from the text to avoid link clutter, 
-    // since we are passing it as a parameter in the Intent below.
+    // --- 2. TRUNCATE FOR X (280-character limit) ---
+    // We aim for ~160-180 chars to leave room for the title, link, and hashtags
+    if (shortDesc.length > 170) {
+      shortDesc = shortDesc.substring(0, 167) + "...";
+    }
+
     const hashtags = "#MyJournal #SriLanka #Travel";
-    const fullTextToCopy = `${locationName}\n\n${displayDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
+    
+    // --- 3. THE "FLIPBOARD" TARGET URL FIX ---
+    // We use the cover photo as the primary shared URL so Twitter unfurls it as the card image.
+    const targetUrl = p.cover_photo_url || shareLink;
+
+    // --- 4. THE TEXT PACKAGE (FOR CLIPBOARD & INTENT) ---
+    // We put the actual app link in the text so it's still clickable
+    const tweetText = `${locationName}\n\n${shortDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
 
     // --- 5. EXECUTE COPY TO CLIPBOARD ---
     try {
-      await navigator.clipboard.writeText(fullTextToCopy);
+      await navigator.clipboard.writeText(tweetText);
       if (typeof setToast === 'function') {
-        setToast({ show: true, msg: "Details copied! Paste in X." });
+        setToast({ show: true, msg: "Details copied! X is opening..." });
         setTimeout(() => setToast({ show: false, msg: "" }), 3000);
       }
     } catch (err) {
       console.error("Clipboard failed", err);
     }
 
-    // --- 6. OPEN TWITTER (X) WITH THE COVER IMAGE PARAMETER ---
-    // Passing targetUrl (p.cover_photo_url) here forces X to fetch/unfurl that image.
-    const twitterUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(targetUrl)}`;
+    // --- 6. OPEN TWITTER (X) WITH PRE-FILLED INTENT ---
+    // By passing 'url' as the cover photo, Twitter will prioritize it for the preview card.
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(targetUrl)}`;
 
     window.open(
       twitterUrl,
