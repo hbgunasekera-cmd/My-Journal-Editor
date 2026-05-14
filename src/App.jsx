@@ -864,40 +864,40 @@ function App() {
 
     const locationName = p.place_name || "Island Vignette";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-
-    // 1. SIMPLE DESCRIPTION & IMAGE URL
+    
+    // --- 1. USE SMALL DESCRIPTION (Manual field, no AI Story) ---
     const shortDesc = p.description || `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
-    const coverImage = p.cover_photo_url || ""; // Your Location Cover Page URL
+    
+    // --- 2. PREPARE COVER IMAGE (The Flipboard/Mastodon Method) ---
+    const targetUrl = p.cover_photo_url || shareLink;
 
-    // 2. TRUNCATE FOR TWITTER (X) LIMITS
-    // We keep the description short to leave room for the links and tags.
+    // --- 3. TRUNCATE FOR X (280 Character Limit) ---
+    // We keep the description tight to leave room for the links and tags.
     let displayDesc = shortDesc;
-    if (displayDesc.length > 100) {
-      displayDesc = displayDesc.substring(0, 97) + "...";
+    if (displayDesc.length > 140) {
+      displayDesc = displayDesc.substring(0, 137) + "...";
     }
 
-    // 3. THE TEXT PACKAGE (FOR CLIPBOARD)
+    // --- 4. THE TEXT PACKAGE (FOR CLIPBOARD) ---
+    // Note: We remove the cover image from the text to avoid link clutter, 
+    // since we are passing it as a parameter in the Intent below.
     const hashtags = "#MyJournal #SriLanka #Travel";
+    const fullTextToCopy = `${locationName}\n\n${displayDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
 
-    // We include the coverImage URL at the end. 
-    // If your Vercel site has OG tags, the 'shareLink' will unfurl the image.
-    // If not, X often "unfurls" the last image link in the tweet.
-    const fullTextToCopy = `${locationName}\n\n${displayDesc}\n\n📍 Discover: ${shareLink}\n\n🖼️ Cover: ${coverImage}\n\n${hashtags}`;
-
-    // 4. EXECUTE COPY TO CLIPBOARD
+    // --- 5. EXECUTE COPY TO CLIPBOARD ---
     try {
       await navigator.clipboard.writeText(fullTextToCopy);
       if (typeof setToast === 'function') {
-        setToast({ show: true, msg: "Details + Cover Link copied! Paste in X." });
+        setToast({ show: true, msg: "Details copied! Paste in X." });
         setTimeout(() => setToast({ show: false, msg: "" }), 3000);
       }
     } catch (err) {
       console.error("Clipboard failed", err);
     }
 
-    // 5. OPEN TWITTER (X)
-    // Opening the blank intent so you can paste everything at once.
-    const twitterUrl = `https://twitter.com/intent/tweet`;
+    // --- 6. OPEN TWITTER (X) WITH THE COVER IMAGE PARAMETER ---
+    // Passing targetUrl (p.cover_photo_url) here forces X to fetch/unfurl that image.
+    const twitterUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(targetUrl)}`;
 
     window.open(
       twitterUrl,
