@@ -109,6 +109,12 @@ const InstagramIcon = ({ className }) => (
   </svg>
 );
 
+const TwitterIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
+  </svg>
+);
+
 /**
  * Optimized Icon Wrapper.
  * Maps Lucide components and local SVGs to a consistent internal naming system.
@@ -145,6 +151,7 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'sparkles': Sparkles,
     'sun': Sun,
     'trash-2': Trash2,
+    'twitter': TwitterIcon,
     'video': Video,
     'wind': Wind,
     'x': X,
@@ -442,7 +449,7 @@ function App() {
     return () => {
       // Clear the timeout if the user clicks another location before the 600ms finishes
       clearTimeout(routingTimeout);
-      
+
       // Final safety check on unmount
       if (routingControl.current && mapRef.current && activeTab !== 'map') {
         try {
@@ -790,6 +797,55 @@ function App() {
       console.error(`${platform} Error:`, err);
       setToast?.({ show: true, msg: `Error: ${err.message}` });
       setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
+    }
+  };
+
+
+  const handleTwitterPush = async (p) => {
+    if (!p) return;
+
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+
+    // 1. Extract first paragraph for the tweet body
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+
+    // 2. Safety truncation for X's 280-character limit
+    // We leave room for the title, link, and hashtags.
+    if (shortDesc.length > 180) {
+      shortDesc = shortDesc.substring(0, 177) + "...";
+    }
+
+    // 3. UI Feedback
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: "Pushing to X..." });
+    }
+
+    try {
+      // 4. Execute Backend Proxy Call
+      const response = await fetch('/api/share-twitter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `${locationName}\n\n${shortDesc}`,
+          link: shareLink
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setToast?.({ show: true, msg: "Live on X!" });
+      } else {
+        throw new Error(result.error || "Twitter API Failure");
+      }
+    } catch (err) {
+      console.error("X Push Error:", err);
+      setToast?.({ show: true, msg: `X Push Failed: ${err.message}` });
+    } finally {
+      // Auto-clear toast after 3 seconds
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     }
   };
 
@@ -2282,51 +2338,40 @@ function App() {
                       </div>
 
                       {/* Action Footer: Social Share Buttons */}
-                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 grid grid-cols-5 gap-1.5">
+                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
 
-                        {/* Facebook Page Posting (Internal Graph API) */}
-                        <button
-                          onClick={() => handleMetaShare(p, 'facebook')}
-                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-blue-600 border border-slate-200 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                        >
-                          {/* This now references the local FacebookIcon SVG via the Icon registry */}
+                        {/* Facebook */}
+                        <button onClick={() => handleMetaShare(p, 'facebook')} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-blue-600 border border-slate-200 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
                           <Icon name="facebook" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Page</span>
                         </button>
 
-                        {/* Instagram Posting (Internal Graph API) */}
-                        <button
-                          onClick={() => handleMetaShare(p, 'instagram')}
-                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-pink-600 border border-slate-200 rounded-xl hover:bg-gradient-to-tr hover:from-amber-400 hover:via-rose-500 hover:to-fuchsia-600 hover:text-white hover:border-transparent transition-all shadow-sm"
-                        >
-                          {/* This now references the local InstagramIcon SVG via the Icon registry */}
+                        {/* Instagram */}
+                        <button onClick={() => handleMetaShare(p, 'instagram')} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-pink-600 border border-slate-200 rounded-xl hover:bg-gradient-to-tr hover:from-amber-400 hover:via-rose-500 hover:to-fuchsia-600 hover:text-white transition-all shadow-sm">
                           <Icon name="instagram" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Insta</span>
                         </button>
 
-                        {/* Mastodon Share Button */}
-                        <button
-                          onClick={() => handleMastodonShare(p)}
-                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-[#2b90d9] hover:text-white hover:border-[#2b90d9] transition-all shadow-sm group"
-                        >
-                          <Icon name="share-2" className="w-3.5 h-3.5 text-[#2b90d9] group-hover:text-white" />
+                        {/* Twitter (X) - NEW */}
+                        <button onClick={() => handleTwitterShare(p)} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+                          <Icon name="twitter" className="w-3.5 h-3.5" />
+                          <span className="text-[7px] font-black uppercase tracking-tighter">X / Twt</span>
+                        </button>
+
+                        {/* Mastodon */}
+                        <button onClick={() => handleMastodonShare(p)} className="flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-[#2b90d9] hover:text-white transition-all shadow-sm">
+                          <Icon name="share-2" className="w-3.5 h-3.5 text-[#2b90d9] hover:text-white" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Masto</span>
                         </button>
 
-                        {/* Flipboard Bookmarklet Button */}
-                        <button
-                          onClick={() => handleFlipboardShare(p)}
-                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
-                        >
+                        {/* Flipboard */}
+                        <button onClick={() => handleFlipboardShare(p)} className="flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
                           <Icon name="refresh-cw" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Flip</span>
                         </button>
 
-                        {/* Pinterest Multi-Pin Hub Button */}
-                        <button
-                          onClick={() => setActivePinHubId(p.id)}
-                          className="flex flex-col items-center justify-center gap-1 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
-                        >
+                        {/* Pinterest */}
+                        <button onClick={() => setActivePinHubId(p.id)} className="flex flex-col items-center justify-center gap-1 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white transition-all shadow-sm">
                           <Icon name="heart" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Pin</span>
                         </button>
