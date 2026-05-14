@@ -99,13 +99,13 @@ const VALID_CATEGORIES = [
 
 const FacebookIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
   </svg>
 );
 
 const InstagramIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
   </svg>
 );
 
@@ -123,13 +123,13 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'cloud-fog': CloudFog,
     'cloud-lightning': CloudLightning,
     'cloud-rain': CloudRain,
-    'facebook': FacebookIcon, 
+    'facebook': FacebookIcon,
     'file-text': FileText,
     'file-x': FileX,
     'heart': Heart,
     'home': Home,
     'image': Image,
-    'instagram': InstagramIcon, 
+    'instagram': InstagramIcon,
     'landmark': Landmark,
     'layout-grid': LayoutGrid,
     'map-pin': MapPin,
@@ -741,49 +741,49 @@ function App() {
   };
 
   const handleMetaShare = async (p, platform) => {
-  if (!p) return;
+    if (!p) return;
 
-  const locationName = p.place_name || "Island Vignette";
-  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-  const hashtags = "#MyJournal #SriLanka #Travel";
-  
-  // Extract first paragraph
-  const storyText = p.ai_article?.story || p.ai_article?.description || "";
-  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const hashtags = "#MyJournal #SriLanka #Travel";
 
-  // Instagram character limit is generous, but keeping it tidy
-  const tootText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
+    // Extract first paragraph
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-  // Notify user that the process has started (useful for slower API calls)
-  if (typeof setToast === 'function') {
-    setToast({ show: true, msg: `Publishing to ${platform}...` });
-  }
+    // Instagram character limit is generous, but keeping it tidy
+    const tootText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
 
-  try {
-    const response = await fetch('/api/share-meta', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        platform: platform,
-        text: tootText,
-        imageUrl: p.cover_photo_url,
-        link: shareLink
-      }),
-    });
-
-    if (response.ok) {
-      setToast?.({ show: true, msg: `Live on ${platform}!` });
-      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
-    } else {
-      const errData = await response.json();
-      throw new Error(errData.error || "Failed to publish");
+    // Notify user that the process has started (useful for slower API calls)
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: `Publishing to ${platform}...` });
     }
-  } catch (err) {
-    console.error(`${platform} Error:`, err);
-    setToast?.({ show: true, msg: `Error: ${err.message}` });
-    setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
-  }
-};
+
+    try {
+      const response = await fetch('/api/share-meta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: platform,
+          text: tootText,
+          imageUrl: p.cover_photo_url,
+          link: shareLink
+        }),
+      });
+
+      if (response.ok) {
+        setToast?.({ show: true, msg: `Live on ${platform}!` });
+        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+      } else {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to publish");
+      }
+    } catch (err) {
+      console.error(`${platform} Error:`, err);
+      setToast?.({ show: true, msg: `Error: ${err.message}` });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
+    }
+  };
 
 
   const triggerToast = (msg) => {
@@ -2274,32 +2274,53 @@ function App() {
                       </div>
 
                       {/* Action Footer: Social Share Buttons */}
-                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 flex items-center justify-between gap-1.5">
-                        {/* Flipboard Button */}
+                      <div className="p-3 border-t border-slate-50 bg-slate-50/50 grid grid-cols-5 gap-1.5">
+
+                        {/* Facebook Page Posting (Internal Graph API) */}
                         <button
-                          onClick={() => handleFlipboardShare(p)}
-                          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                          onClick={() => handleMetaShare(p, 'facebook')}
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-blue-600 border border-slate-200 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                         >
-                          <Icon name="refresh-cw" className="w-3.5 h-3.5" />
-                          <span className="text-[8px] font-black uppercase tracking-tighter">Flipboard</span>
+                          {/* This now references the local FacebookIcon SVG via the Icon registry */}
+                          <Icon name="facebook" className="w-3.5 h-3.5" />
+                          <span className="text-[7px] font-black uppercase tracking-tighter">Page</span>
                         </button>
 
-                        {/* Mastodon Button */}
+                        {/* Instagram Posting (Internal Graph API) */}
+                        <button
+                          onClick={() => handleMetaShare(p, 'instagram')}
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-pink-600 border border-slate-200 rounded-xl hover:bg-gradient-to-tr hover:from-amber-400 hover:via-rose-500 hover:to-fuchsia-600 hover:text-white hover:border-transparent transition-all shadow-sm"
+                        >
+                          {/* This now references the local InstagramIcon SVG via the Icon registry */}
+                          <Icon name="instagram" className="w-3.5 h-3.5" />
+                          <span className="text-[7px] font-black uppercase tracking-tighter">Insta</span>
+                        </button>
+
+                        {/* Mastodon Share Button */}
                         <button
                           onClick={() => handleMastodonShare(p)}
-                          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-[#2b90d9] hover:text-white hover:border-[#2b90d9] transition-all shadow-sm group"
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-[#2b90d9] hover:text-white hover:border-[#2b90d9] transition-all shadow-sm group"
                         >
                           <Icon name="share-2" className="w-3.5 h-3.5 text-[#2b90d9] group-hover:text-white" />
-                          <span className="text-[8px] font-black uppercase tracking-tighter">Mastodon</span>
+                          <span className="text-[7px] font-black uppercase tracking-tighter">Masto</span>
                         </button>
 
-                        {/* Pinterest/PinHub Button */}
+                        {/* Flipboard Bookmarklet Button */}
+                        <button
+                          onClick={() => handleFlipboardShare(p)}
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                        >
+                          <Icon name="refresh-cw" className="w-3.5 h-3.5" />
+                          <span className="text-[7px] font-black uppercase tracking-tighter">Flip</span>
+                        </button>
+
+                        {/* Pinterest Multi-Pin Hub Button */}
                         <button
                           onClick={() => setActivePinHubId(p.id)}
-                          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
                         >
                           <Icon name="heart" className="w-3.5 h-3.5" />
-                          <span className="text-[8px] font-black uppercase tracking-tighter">Pinterest</span>
+                          <span className="text-[7px] font-black uppercase tracking-tighter">Pin</span>
                         </button>
                       </div>
 
