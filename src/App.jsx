@@ -2353,7 +2353,7 @@ function App() {
                         </button>
 
                         {/* Twitter (X) - NEW */}
-                        <button onClick={() => handleTwitterShare(p)} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+                        <button onClick={() => handleTwitterPush(p)} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
                           <Icon name="twitter" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">X / Twt</span>
                         </button>
