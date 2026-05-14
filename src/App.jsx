@@ -380,6 +380,8 @@ function App() {
 
   // --- 3. STEADY ROUTING EFFECT (No More Blinking) ---
 
+  // --- 3. STEADY ROUTING EFFECT (No More Blinking & Debounced) ---
+
   React.useEffect(() => {
     // 1. Cleanup: If we aren't on the map tab, safely remove the control
     if (activeTab !== 'map' || !mapReady) {
@@ -390,7 +392,7 @@ function App() {
             mapRef.current.removeControl(routingControl.current);
           }
         } catch (e) {
-          triggerToast("Cleanup error ignored:", e);
+          console.warn("Cleanup error ignored:", e);
         }
         routingControl.current = null;
       }
@@ -406,37 +408,43 @@ function App() {
       ...selectedTrip.map(p => L.latLng(p.latitude, p.longitude))
     ];
 
-    // 3. Update or Create
-    try {
-      if (routingControl.current) {
-        // Check if the internal routing engine still thinks it's on a map
-        if (routingControl.current._map) {
-          routingControl.current.setWaypoints(waypoints);
-        } else {
-          routingControl.current.addTo(mapRef.current);
-          routingControl.current.setWaypoints(waypoints);
+    // 3. Debounce the routing request to prevent OSRM rate-limiting blocks
+    const routingTimeout = setTimeout(() => {
+      try {
+        if (routingControl.current) {
+          // Check if the internal routing engine still thinks it's on a map
+          if (routingControl.current._map) {
+            routingControl.current.setWaypoints(waypoints);
+          } else {
+            routingControl.current.addTo(mapRef.current);
+            routingControl.current.setWaypoints(waypoints);
+          }
+        } else if (waypoints.length >= 2) {
+          routingControl.current = L.Routing.control({
+            waypoints: waypoints,
+            lineOptions: {
+              styles: [{ color: '#ef4444', weight: 5, opacity: 0.8 }]
+            },
+            router: L.Routing.osrmv1({
+              // Switched to the primary OSRM demo server
+              serviceUrl: 'https://router.project-osrm.org/route/v1'
+            }),
+            createMarker: () => null,
+            addWaypoints: false,
+            show: false
+          }).addTo(mapRef.current);
         }
-      } else if (waypoints.length >= 2) {
-        routingControl.current = L.Routing.control({
-          waypoints: waypoints,
-          lineOptions: {
-            styles: [{ color: '#ef4444', weight: 5, opacity: 0.8 }]
-          },
-          router: L.Routing.osrmv1({
-            serviceUrl: 'https://routing.openstreetmap.de/routed-car/route/v1'
-          }),
-          createMarker: () => null,
-          addWaypoints: false,
-          show: false
-        }).addTo(mapRef.current);
+      } catch (err) {
+        console.error("Routing calculation failed:", err);
       }
-    } catch (err) {
-
-    }
+    }, 600); // 600ms delay prevents spamming the public API
 
     return () => {
+      // Clear the timeout if the user clicks another location before the 600ms finishes
+      clearTimeout(routingTimeout);
+      
       // Final safety check on unmount
-      if (routingControl.current && mapRef.current) {
+      if (routingControl.current && mapRef.current && activeTab !== 'map') {
         try {
           mapRef.current.removeControl(routingControl.current);
         } catch (e) { }
