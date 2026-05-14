@@ -860,59 +860,53 @@ function App() {
 */}
 
   const handleTwitterPush = async (p) => {
-    if (!p) return;
+  if (!p) return;
 
-    const locationName = p.place_name || "Island Vignette";
-    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  const locationName = p.place_name || "Island Vignette";
+  // We use the cover photo as the primary share link so Twitter's crawler sees the image first
+  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  
+  // --- 1. SIMPLE DESCRIPTION ---
+  // Using a short, manual description instead of the long AI article
+  const shortDesc = p.description || `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
 
-    // --- 1. FIRST PARAGRAPH EXTRACTION ---
-    let shortDesc = "";
-    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+  // --- 2. TRUNCATE FOR TWITTER (X) LIMITS ---
+  // Keeping it very tight so the image link is prominent
+  let displayDesc = shortDesc;
+  if (displayDesc.length > 100) {
+    displayDesc = displayDesc.substring(0, 97) + "...";
+  }
 
-    if (storyText) {
-      // Split the text by double newlines to isolate the first paragraph, then clean markdown
-      shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
-    } else {
-      // Fallback if AI article hasn't been generated yet
-      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+  // --- 3. THE TEXT PACKAGE ---
+  const hashtags = "#MyJournal #SriLanka #Travel";
+  
+  /**
+   * NOTE: To show the image as a preview on X, the "shareLink" must have 
+   * Open Graph (OG) tags configured on your Vercel site. 
+   * If it still shows as a link, we include the direct photo URL at the end.
+   */
+  const fullTextToCopy = `${locationName}\n\n${displayDesc}\n\n📍 Discover: ${shareLink}\n\n${hashtags}`;
+
+  // --- 4. EXECUTE COPY TO CLIPBOARD ---
+  try {
+    await navigator.clipboard.writeText(fullTextToCopy);
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: "Details copied! Paste in X." });
+      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
     }
+  } catch (err) {
+    console.error("Clipboard failed", err);
+  }
 
-    // --- 2. TRUNCATE FOR TWITTER (X) LIMITS ---
-    // Twitter limits standard tweets to 280 characters. URLs always count as 23 characters.
-    // We cap the description at ~120 characters to ensure the location, links, and tags fit safely.
-    if (shortDesc.length > 120) {
-      shortDesc = shortDesc.substring(0, 117) + "...";
-    }
+  // --- 5. OPEN TWITTER (X) ---
+  const twitterUrl = `https://twitter.com/intent/tweet`;
 
-    // --- 3. THE TEXT PACKAGE (FOR CLIPBOARD) ---
-    const hashtags = "#MyJournal #SriLanka #Travel";
-    const targetMediaUrl = p.cover_photo_url || shareLink;
-
-    // Formatted cleanly with line breaks. 
-    const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 Discover more: ${shareLink}\n\n🖼️ Cover: ${targetMediaUrl}\n\n${hashtags}`;
-
-    // --- 4. EXECUTE COPY TO CLIPBOARD ---
-    try {
-      await navigator.clipboard.writeText(fullTextToCopy);
-      // Visual feedback using your app's toast system
-      if (typeof setToast === 'function') {
-        setToast({ show: true, msg: "Post copied! Paste it in the X compose window." });
-        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
-      }
-    } catch (err) {
-      console.error("Clipboard failed", err);
-    }
-
-    // --- 5. OPEN TWITTER (X) ---
-    // We open a blank compose window. 
-    const twitterUrl = `https://twitter.com/intent/tweet`;
-
-    window.open(
-      twitterUrl,
-      'twitter-share',
-      'width=600,height=500,scrollbars=yes,resizable=yes'
-    );
-  };
+  window.open(
+    twitterUrl,
+    'twitter-share',
+    'width=600,height=500,scrollbars=yes,resizable=yes'
+  );
+};
 
 
   const triggerToast = (msg) => {
