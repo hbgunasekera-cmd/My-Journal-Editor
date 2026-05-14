@@ -801,6 +801,14 @@ function App() {
   };
 
 
+  {/*
+
+  *** Automated Twitter sharing is currently disabled due to API access issues. 
+  The function below is a placeholder for when you have API access sorted out. 
+  For now, the app uses the standard Twitter Web Intent which opens a pre-filled 
+  tweet in the user's browser, allowing them to share manually without needing API 
+  credentials.
+
   const handleTwitterPush = async (p) => {
     if (!p) return;
 
@@ -847,6 +855,28 @@ function App() {
       // Auto-clear toast after 3 seconds
       setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     }
+  };
+  
+*/}
+
+  const handleTwitterPush = (p) => {
+    if (!p) return;
+
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+
+    if (shortDesc.length > 180) {
+      shortDesc = shortDesc.substring(0, 177) + "...";
+    }
+
+    // This uses the user's browser, so it's free and requires no API credits
+    const tweetText = encodeURIComponent(`${locationName}\n\n${shortDesc}\n\n📍 Discover more:`);
+    const hashtags = "MyJournal,SriLanka,Travel";
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${tweetText}&url=${encodeURIComponent(shareLink)}&hashtags=${hashtags}`;
+
+    window.open(twitterUrl, '_blank', 'width=550,height=420');
   };
 
 

@@ -11,8 +11,8 @@ export default async function handler(req, res) {
   // 2. Credential Initialization
   // Ensure these are set in your Vercel Project Environment Variables
   const client = new TwitterApi({
-    appKey: process.env.TWITTER_API_KEY,         // Consumer Key
-    appSecret: process.env.TWITTER_API_SECRET,   // Consumer Secret
+    appKey: process.env.TWITTER_API_KEY,         
+    appSecret: process.env.TWITTER_API_SECRET,   
     accessToken: process.env.TWITTER_ACCESS_TOKEN,
     accessSecret: process.env.TWITTER_ACCESS_SECRET,
   });
