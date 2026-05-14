@@ -16,7 +16,7 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: imageUrl,
-          message: `${text}\n\n📍 View Map: ${link}`,
+          message: `${text}\n\n 🔗 Web: ${link}`,
           access_token: ACCESS_TOKEN
         })
       });
