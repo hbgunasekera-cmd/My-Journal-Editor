@@ -19,14 +19,12 @@ import {
   CloudLightning,
   CloudRain,
   Compass,
-  Facebook,
   FileText,
   FileX,
   Heart,
   HelpCircle,
   Home,
   Image,
-  Instagram,
   Landmark,
   LayoutGrid,
   MapPin,
@@ -98,6 +96,23 @@ const VALID_CATEGORIES = [
  * Optimized Icon Wrapper using native Lucide-React components.
  * This replaces the manual DOM injection for better React stability.[cite: 1]
  */
+
+const FacebookIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+  </svg>
+);
+
+const InstagramIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+  </svg>
+);
+
+/**
+ * Optimized Icon Wrapper.
+ * Maps Lucide components and local SVGs to a consistent internal naming system.
+ */
 const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
   const icons = {
     'camera': Camera,
@@ -108,13 +123,13 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'cloud-fog': CloudFog,
     'cloud-lightning': CloudLightning,
     'cloud-rain': CloudRain,
-    'facebook': Facebook,
+    'facebook': FacebookIcon, 
     'file-text': FileText,
     'file-x': FileX,
     'heart': Heart,
     'home': Home,
     'image': Image,
-    'instagram': Instagram,
+    'instagram': InstagramIcon, 
     'landmark': Landmark,
     'layout-grid': LayoutGrid,
     'map-pin': MapPin,
@@ -135,15 +150,15 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'x': X,
   };
 
-  const LucideIcon = icons[name] || HelpCircle;
+  const DynamicIcon = icons[name] || HelpCircle;
 
+  // Render logic to handle local SVG components and Lucide components identically
   return (
     <span className={`inline-flex items-center justify-center shrink-0 ${className}`}>
-      <LucideIcon className="w-full h-full" strokeWidth={1.75} />
+      <DynamicIcon className="w-full h-full" strokeWidth={1.75} />
     </span>
   );
 });
-
 /**
  * Dynamic Weather Icon Component mapping API conditions to Lucide icons.
  * Note: Uses direct Lucide components for color flexibility in route cards.
