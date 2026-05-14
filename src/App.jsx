@@ -860,54 +860,59 @@ function App() {
 */}
 
   const handleTwitterPush = async (p) => {
-  if (!p) return;
+    if (!p) return;
 
-  const locationName = p.place_name || "Island Vignette";
-  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-  // --- 1. FIRST PARAGRAPH EXTRACTION ---
-  let shortDesc = "";
-  const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    // --- 1. FIRST PARAGRAPH EXTRACTION ---
+    let shortDesc = "";
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
 
-  if (storyText) {
-    // Split the text by double newlines to isolate the first paragraph, then clean markdown
-    shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
-  } else {
-    // Fallback if AI article hasn't been generated yet
-    shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
-  }
-
-  // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
-  const hashtags = "#MyJournal #SriLanka #Travel";
-  const targetMediaUrl = p.cover_photo_url || shareLink;
-  
-  // Formatted cleanly with line breaks. 
-  // Putting the image URL in the text ensures Twitter unfurls it into a preview card!
-  const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 Discover more: ${shareLink}\n\n🖼️ Cover: ${targetMediaUrl}\n\n${hashtags}`;
-
-  // --- 3. EXECUTE COPY TO CLIPBOARD ---
-  try {
-    await navigator.clipboard.writeText(fullTextToCopy);
-    // Visual feedback using your app's toast system
-    if (typeof setToast === 'function') {
-      setToast({ show: true, msg: "Post copied! Paste it in the X compose window." });
-      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+    if (storyText) {
+      // Split the text by double newlines to isolate the first paragraph, then clean markdown
+      shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
+    } else {
+      // Fallback if AI article hasn't been generated yet
+      shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
     }
-  } catch (err) {
-    console.error("Clipboard failed", err);
-  }
 
-  // --- 4. OPEN TWITTER (X) ---
-  // We open a blank compose window. Since the user just copied the text, 
-  // all they have to do is paste (Ctrl+V / Cmd+V) and the image link will unfurl.
-  const twitterUrl = `https://twitter.com/intent/tweet`;
+    // --- 2. TRUNCATE FOR TWITTER (X) LIMITS ---
+    // Twitter limits standard tweets to 280 characters. URLs always count as 23 characters.
+    // We cap the description at ~120 characters to ensure the location, links, and tags fit safely.
+    if (shortDesc.length > 120) {
+      shortDesc = shortDesc.substring(0, 117) + "...";
+    }
 
-  window.open(
-    twitterUrl,
-    'twitter-share',
-    'width=600,height=500,scrollbars=yes,resizable=yes'
-  );
-};
+    // --- 3. THE TEXT PACKAGE (FOR CLIPBOARD) ---
+    const hashtags = "#MyJournal #SriLanka #Travel";
+    const targetMediaUrl = p.cover_photo_url || shareLink;
+
+    // Formatted cleanly with line breaks. 
+    const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 Discover more: ${shareLink}\n\n🖼️ Cover: ${targetMediaUrl}\n\n${hashtags}`;
+
+    // --- 4. EXECUTE COPY TO CLIPBOARD ---
+    try {
+      await navigator.clipboard.writeText(fullTextToCopy);
+      // Visual feedback using your app's toast system
+      if (typeof setToast === 'function') {
+        setToast({ show: true, msg: "Post copied! Paste it in the X compose window." });
+        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+      }
+    } catch (err) {
+      console.error("Clipboard failed", err);
+    }
+
+    // --- 5. OPEN TWITTER (X) ---
+    // We open a blank compose window. 
+    const twitterUrl = `https://twitter.com/intent/tweet`;
+
+    window.open(
+      twitterUrl,
+      'twitter-share',
+      'width=600,height=500,scrollbars=yes,resizable=yes'
+    );
+  };
 
 
   const triggerToast = (msg) => {
