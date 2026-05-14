@@ -859,25 +859,55 @@ function App() {
   
 */}
 
-  const handleTwitterPush = (p) => {
-    if (!p) return;
+  const handleTwitterPush = async (p) => {
+  if (!p) return;
 
-    const locationName = p.place_name || "Island Vignette";
-    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    const storyText = p.ai_article?.story || p.ai_article?.description || "";
-    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+  const locationName = p.place_name || "Island Vignette";
+  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
 
-    if (shortDesc.length > 180) {
-      shortDesc = shortDesc.substring(0, 177) + "...";
+  // --- 1. FIRST PARAGRAPH EXTRACTION ---
+  let shortDesc = "";
+  const storyText = p.ai_article?.story || p.ai_article?.description || "";
+
+  if (storyText) {
+    // Split the text by double newlines to isolate the first paragraph, then clean markdown
+    shortDesc = storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim();
+  } else {
+    // Fallback if AI article hasn't been generated yet
+    shortDesc = `Exploring the raw beauty of ${locationName}, Sri Lanka.`;
+  }
+
+  // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
+  const hashtags = "#MyJournal #SriLanka #Travel";
+  const targetMediaUrl = p.cover_photo_url || shareLink;
+  
+  // Formatted cleanly with line breaks. 
+  // Putting the image URL in the text ensures Twitter unfurls it into a preview card!
+  const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 Discover more: ${shareLink}\n\n🖼️ Cover: ${targetMediaUrl}\n\n${hashtags}`;
+
+  // --- 3. EXECUTE COPY TO CLIPBOARD ---
+  try {
+    await navigator.clipboard.writeText(fullTextToCopy);
+    // Visual feedback using your app's toast system
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: "Post copied! Paste it in the X compose window." });
+      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
     }
+  } catch (err) {
+    console.error("Clipboard failed", err);
+  }
 
-    // This uses the user's browser, so it's free and requires no API credits
-    const tweetText = encodeURIComponent(`${locationName}\n\n${shortDesc}\n\n📍 Discover more:`);
-    const hashtags = "MyJournal,SriLanka,Travel";
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${tweetText}&url=${encodeURIComponent(shareLink)}&hashtags=${hashtags}`;
+  // --- 4. OPEN TWITTER (X) ---
+  // We open a blank compose window. Since the user just copied the text, 
+  // all they have to do is paste (Ctrl+V / Cmd+V) and the image link will unfurl.
+  const twitterUrl = `https://twitter.com/intent/tweet`;
 
-    window.open(twitterUrl, '_blank', 'width=550,height=420');
-  };
+  window.open(
+    twitterUrl,
+    'twitter-share',
+    'width=600,height=500,scrollbars=yes,resizable=yes'
+  );
+};
 
 
   const triggerToast = (msg) => {
