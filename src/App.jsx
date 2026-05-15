@@ -635,7 +635,7 @@ function App() {
     // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
     const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
     // Formatted cleanly with line breaks
-    const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 Location: ${shareLink}\n\n${hashtags}`;
+    const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍Location: ${shareLink}\n\n${hashtags}`;
 
     // --- 3. EXECUTE COPY TO CLIPBOARD ---
     try {
@@ -694,7 +694,7 @@ function App() {
 
     const hashtagString = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
     
-    const finalDescription = `${shortDesc}\n\n📍 Location: ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
+    const finalDescription = `${shortDesc}\n\n📍Location: ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
 
     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
 
@@ -742,7 +742,7 @@ function App() {
     }
 
     // 4. CONSTRUCT THE COMPLIANT TOOT
-    const tootText = `${locationName}\n\n${shortDesc}\n\n 📍 Location: ${shareLink}\n\n${hashtags}`;
+    const tootText = `${locationName}\n\n${shortDesc}\n\n 📍Location: ${shareLink}\n\n${hashtags}`;
 
     // 5. CALL PROXY API
     try {
@@ -893,7 +893,7 @@ function App() {
     shortDesc = (lastPeriod > 60) ? tempDesc.substring(0, lastPeriod + 1) : tempDesc + "...";
   }
 
-  const tweetText = `${locationName}\n\n${shortDesc}\n\n📍 Location: ${shareLink}\n\n${hashtags}`;
+  const tweetText = `${locationName}\n\n${shortDesc}\n\n📍Location: ${shareLink}\n\n${hashtags}`;
 
   // 2. UI FEEDBACK
   if (typeof setToast === 'function') {
