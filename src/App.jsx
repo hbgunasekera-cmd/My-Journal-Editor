@@ -702,39 +702,46 @@ function App() {
   const handleMastodonShare = async (p) => {
     if (!p) return;
 
-    // 1. CONTENT SETUP
+    // 1. BASE CONTENT SETUP
     const locationName = p.place_name || "Island Vignette";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+    
+    // Curated high-impact hashtags that best describe your site, travel niche, and gear
+    const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
 
-    // --- EXTRACT FIRST PARAGRAPH (Flipboard Method) ---
+    // Clean up text by removing markdown artifacts
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
-    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+    const cleanText = storyText.replace(/[#*]/g, '').trim();
 
-    // --- TARGETED CHARACTER LIMIT ---
-    // Mastodon Hard Limit: 500. 
-    // We aim for ~250 chars of article text to keep the post clean and safe.
-    const targetDescLimit = 250;
+    // 2. DYNAMIC CHARACTER BUDGETING (Mastodon counts URLs as exactly 23 characters)
+    const fixedCost = locationName.length + 4 + 7 + 23 + 4 + hashtags.length; // Text template formatting costs
+    const maxDescBudget = 500 - fixedCost - 5; // Strict limit with a 5-character safety buffer
 
-    if (shortDesc.length > targetDescLimit) {
-      // Cut at the target limit
-      let tempDesc = shortDesc.substring(0, targetDescLimit);
+    // 3. SMART TEXT PARSING (Ensures grammatically complete sentences)
+    const sentences = cleanText.match(/[^.!?]+[.!?]+/g) || [cleanText];
+    let shortDesc = "";
 
-      // BACKTRACK to the last period to ensure a complete sentence
-      const lastPeriod = tempDesc.lastIndexOf(".");
-
-      if (lastPeriod > 100) { // Ensure the sentence isn't too tiny
-        shortDesc = tempDesc.substring(0, lastPeriod + 1);
+    for (let sentence of sentences) {
+      const candidate = (shortDesc + " " + sentence.trim()).trim();
+      if (candidate.length <= maxDescBudget) {
+        shortDesc = candidate;
       } else {
-        // Fallback: Cut at the last full word
-        const lastSpace = tempDesc.lastIndexOf(" ");
-        shortDesc = (lastSpace > 0 ? tempDesc.substring(0, lastSpace) : tempDesc) + "...";
+        break; // Stop adding text before it cuts off grammatically
       }
     }
 
-    const tootText = `${locationName}\n\n${shortDesc}\n\n 🔗 Web: ${shareLink}\n\n${hashtags}`;
+    // Fallback protection in case a single starting sentence is longer than the budget
+    if (!shortDesc && cleanText) {
+      shortDesc = cleanText.substring(0, maxDescBudget).trim();
+      const lastSpace = shortDesc.lastIndexOf(" ");
+      if (lastSpace > 0) shortDesc = shortDesc.substring(0, lastSpace);
+      shortDesc += "...";
+    }
 
-    // 2. CALL PROXY
+    // 4. CONSTRUCT THE COMPLIANT TOOT
+    const tootText = `${locationName}\n\n${shortDesc}\n\n🔗 Web: ${shareLink}\n\n${hashtags}`;
+
+    // 5. CALL PROXY API
     try {
       const response = await fetch('/api/share-mastodon', {
         method: 'POST',
@@ -752,8 +759,10 @@ function App() {
       }
     } catch (err) {
       console.error("Mastodon Error:", err);
+      setToast?.({ show: true, msg: "Mastodon Error" });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     }
-  };
+};
 
   const handleMetaShare = async (p, platform) => {
     if (!p) return;
