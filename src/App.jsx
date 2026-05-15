@@ -767,50 +767,53 @@ function App() {
     }
 };
 
-  const handleMetaShare = async (p, platform) => {
-    if (!p) return;
+  const handleMetaShare = async (p, platform, accessToken) => {
+  if (!p) return;
 
-    const locationName = p.place_name || "Island Vignette";
-    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    const hashtags = "#MyJournal #SriLanka #Travel";
+  // 1. Build context-aware metadata targets
+  const locationName = p.place_name || "Island Vignette";
+  const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
 
-    // Extract first paragraph
-    const storyText = p.ai_article?.story || p.ai_article?.description || "";
-    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+  // 2. Extract and format the clean primary text snippet from the journal story
+  const storyText = p.ai_article?.story || p.ai_article?.description || "";
+  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-    // Instagram character limit is generous, but keeping it tidy
-    const tootText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
+  // Structure clean, scannable copy for social feeds
+  const socialText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
 
-    // Notify user that the process has started (useful for slower API calls)
-    if (typeof setToast === 'function') {
-      setToast({ show: true, msg: `Publishing to ${platform}...` });
+  // Notify user that the publishing sync has started
+  if (typeof setToast === 'function') {
+    setToast({ show: true, msg: `Publishing to ${platform}...` });
+  }
+
+  try {
+    // 3. Dispatch the bundle to your /api/share-meta handler
+    const response = await fetch('/api/share-meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        platform: platform,
+        text: socialText,
+        imageUrl: p.cover_photo_url,
+        link: shareLink,
+        fbAccessToken: accessToken // 👈 Forwards your live OAuth token to authorize the v25.0 requests
+      }),
+    });
+
+    if (response.ok) {
+      setToast?.({ show: true, msg: `Live on ${platform}!` });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+    } else {
+      const errData = await response.json();
+      throw new Error(errData.error || `Failed to post to ${platform}`);
     }
-
-    try {
-      const response = await fetch('/api/share-meta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform: platform,
-          text: tootText,
-          imageUrl: p.cover_photo_url,
-          link: shareLink
-        }),
-      });
-
-      if (response.ok) {
-        setToast?.({ show: true, msg: `Live on ${platform}!` });
-        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
-      } else {
-        const errData = await response.json();
-        throw new Error(errData.error || "Failed to publish");
-      }
-    } catch (err) {
-      console.error(`${platform} Error:`, err);
-      setToast?.({ show: true, msg: `Error: ${err.message}` });
-      setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
-    }
-  };
+  } catch (err) {
+    console.error(`${platform} Integration Error:`, err);
+    setToast?.({ show: true, msg: `Error: ${err.message}` });
+    setTimeout(() => setToast?.({ show: false, msg: "" }), 5000);
+  }
+};
 
 
   {/*
