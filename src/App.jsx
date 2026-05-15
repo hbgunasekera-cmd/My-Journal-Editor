@@ -633,7 +633,7 @@ function App() {
     }
 
     // --- 2. THE TEXT PACKAGE (FOR CLIPBOARD) ---
-    const hashtags = "#MyJournal #SriLanka #IslandVignettes #Travel";
+    const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
     // Formatted cleanly with line breaks
     const fullTextToCopy = `${locationName}\n\n${shortDesc}\n\n📍 View Map: ${shareLink}\n\n${hashtags}`;
 
@@ -646,7 +646,9 @@ function App() {
         setTimeout(() => setToast({ show: false, msg: "" }), 3000);
       }
     } catch (err) {
-      console.error("Clipboard failed", err);
+      console.error("Flipboard failed", err);
+      setToast({ show: true, msg: "Flipboard failed" });
+        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
     }
 
     // --- 4. OPEN FLIPBOARD ---
@@ -690,7 +692,7 @@ function App() {
       shortDesc = fallbacks[index % fallbacks.length];
     }
 
-    const hashtagString = "#MyJournal #SriLanka #Travel #IslandVibes";
+    const hashtagString = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
     const finalDescription = `${shortDesc}\n\n 🔗 Web  ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
 
     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
