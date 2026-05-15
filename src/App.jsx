@@ -693,8 +693,9 @@ function App() {
     }
 
     const hashtagString = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
-    const finalDescription = `${shortDesc}\n\n 🔗 Web  ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
-
+    
+    const finalDescription = `${shortDesc}\n\n📍 Location: ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
+    
     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
 
     window.open(pinterestUrl, '_blank', 'width=750,height=600');
