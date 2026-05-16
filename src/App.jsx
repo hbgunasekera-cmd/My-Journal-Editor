@@ -805,13 +805,31 @@ function App() {
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
     let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-    // 3. Defensive character truncation specifically for Threads (500-character ceiling)
+    // 3. Smart grammatical truncation specifically for Threads (500-character ceiling)
     if (platform === 'threads') {
       const baseTemplate = `📍 ${locationName}\n\n\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
       const maxDescLength = 500 - baseTemplate.length;
 
       if (shortDesc.length > maxDescLength) {
-        shortDesc = shortDesc.substring(0, maxDescLength - 3) + "...";
+        const candidateZone = shortDesc.substring(0, maxDescLength);
+        
+        // Find the absolute last complete sentence marker (. ! ?) within the safe ceiling limits
+        const lastSentenceEnd = Math.max(
+          candidateZone.lastIndexOf('.'),
+          candidateZone.lastIndexOf('!'),
+          candidateZone.lastIndexOf('?')
+        );
+
+        // If a full sentence ends within the zone, trim cleanly right there
+        if (lastSentenceEnd > 30) { 
+          shortDesc = candidateZone.substring(0, lastSentenceEnd + 1);
+        } else {
+          // Fallback: If no sentence end is found, break at the last full word instead of mid-word
+          const lastSpace = candidateZone.lastIndexOf(' ');
+          shortDesc = lastSpace > 0 
+            ? candidateZone.substring(0, lastSpace).replace(/[,;:]$/, '') + "..." 
+            : candidateZone.substring(0, maxDescLength - 3) + "...";
+        }
       }
     }
 
