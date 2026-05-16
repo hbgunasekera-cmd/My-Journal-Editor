@@ -97,15 +97,39 @@ const VALID_CATEGORIES = [
  * This replaces the manual DOM injection for better React stability.[cite: 1]
  */
 
-const FacebookIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+const InstagramIcon = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
   </svg>
 );
 
-const InstagramIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+const ThreadsIcon = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.33 14.15c-.63.54-1.43.81-2.34.81-1.23 0-2.23-.49-2.9-1.41-.54-.74-.81-1.74-.81-2.99 0-1.26.28-2.27.82-3 .67-.91 1.67-1.37 2.89-1.37 1.26 0 2.23.47 2.88 1.4.53.75.79 1.76.79 3.01v.83c0 .55-.15.96-.43 1.23-.28.27-.68.41-1.16.41-.44 0-.81-.14-1.08-.41-.27-.28-.41-.67-.41-1.19v-3.79H10v3.92c0 .88.26 1.57.77 2.07.51.5 1.22.75 2.11.75.81 0 1.49-.24 2.04-.7v.61h1.67v-4.89c0-1.65-.4-2.96-1.18-3.92-.91-1.12-2.24-1.69-3.94-1.69-1.72 0-3.05.56-3.94 1.67-.79.98-1.19 2.31-1.19 3.95 0 1.62.4 2.95 1.19 3.93.9.12 2.23.69 3.94.69.88 0 1.67-.16 2.36-.47v-1.72z" />
   </svg>
 );
 
@@ -129,7 +153,6 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'cloud-fog': CloudFog,
     'cloud-lightning': CloudLightning,
     'cloud-rain': CloudRain,
-    'facebook': FacebookIcon,
     'file-text': FileText,
     'file-x': FileX,
     'heart': Heart,
@@ -150,6 +173,7 @@ const Icon = React.memo(({ name, className = "w-4 h-4" }) => {
     'snowflake': Snowflake,
     'sparkles': Sparkles,
     'sun': Sun,
+    'threads': ThreadsIcon,
     'trash-2': Trash2,
     'twitter': TwitterIcon,
     'video': Video,
@@ -773,40 +797,53 @@ function App() {
 
     // 1. Build context-aware metadata targets
     const locationName = p.place_name || "Island Vignette";
-    
-    // Generates the specific viewer link for this travel spot
     const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    
     const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
 
-    // 2. Extract and format the clean primary text snippet from the journal story
+    // 2. Extract and clean the primary text snippet from the journal story
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
     let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-    // 3. Structure clean, scannable copy for social feeds (Including Link)
+    // 3. Defensive character truncation specifically for Threads (500-character ceiling)
+    if (platform === 'threads') {
+      const baseTemplate = `📍 ${locationName}\n\n\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
+      const maxDescLength = 500 - baseTemplate.length;
+
+      if (shortDesc.length > maxDescLength) {
+        shortDesc = shortDesc.substring(0, maxDescLength - 3) + "...";
+      }
+    }
+
+    // 4. Structure the clean, scannable final copy
     const socialText = `📍 ${locationName}\n\n${shortDesc}\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
 
     // Notify user that the publishing sync has started
     if (typeof setToast === 'function') {
-      setToast({ show: true, msg: `Publishing to ${platform}...` });
+      const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
+      setToast({ show: true, msg: `Publishing to ${platformName}...` });
     }
 
     try {
-      // 4. Dispatch the bundle to your /api/share-meta handler
+      // 5. Dispatch the payload bundle to your backend api endpoint route
       const response = await fetch('/api/share-meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform: platform,
           text: socialText,
-          imageUrl: p.cover_photo_url, // 👈 Explicitly attaches the Cover Photo URL payload
+          imageUrl: p.cover_photo_url,
           link: shareLink,
-          fbAccessToken: accessToken 
+          // Dynamically matches the specific backend key expected based on platform target
+          ...(platform === 'threads'
+            ? { threadsAccessToken: accessToken }
+            : { fbAccessToken: accessToken }
+          )
         }),
       });
 
       if (response.ok) {
-        setToast?.({ show: true, msg: `Live on ${platform}!` });
+        const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
+        setToast?.({ show: true, msg: `Live on ${platformName}!` });
         setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
       } else {
         const errData = await response.json();
@@ -1735,6 +1772,10 @@ function App() {
         else if (lowerUA.includes('instagram')) {
           finalSource = 'Instagram';
         }
+        // Meta uses the internal codename 'barcelona' for Threads in-app browser user agents
+        else if (lowerUA.includes('threads') || lowerUA.includes('barcelona')) {
+          finalSource = 'Threads';
+        }
         else if (lowerUA.includes('fban') || lowerUA.includes('fbav')) {
           finalSource = 'Facebook';
         }
@@ -2424,12 +2465,6 @@ function App() {
                       {/* Action Footer: Social Share Buttons */}
                       <div className="p-3 border-t border-slate-50 bg-slate-50/50 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
 
-                        {/* Facebook */}
-                        <button onClick={() => handleMetaShare(p, 'facebook')} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-blue-600 border border-slate-200 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                          <Icon name="facebook" className="w-3.5 h-3.5" />
-                          <span className="text-[7px] font-black uppercase tracking-tighter">Page</span>
-                        </button>
-
                         {/* Instagram */}
                         <button
                           onClick={() => handleMetaShare(p, 'instagram', fbToken)}
@@ -2437,6 +2472,16 @@ function App() {
                         >
                           <Icon name="instagram" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Insta</span>
+                        </button>
+
+                        {/* Threads */}
+                        <button
+                          onClick={() => handleMetaShare(p, 'threads', threadsToken)}
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-black border border-slate-200 rounded-xl hover:bg-black hover:text-white transition-all shadow-sm"
+                        >
+                          {/* Utilizing the registry lookup mapping to match the clean layout configuration of Instagram */}
+                          <Icon name="threads" className="w-3.5 h-3.5" />
+                          <span className="text-[7px] font-black uppercase tracking-tighter">Threads</span>
                         </button>
 
                         {/* Twitter (X) - NEW */}
