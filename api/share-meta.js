@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   const { platform, text, imageUrl, link, fbAccessToken } = req.body;
   
   // 2. Prioritize the runtime token, falling back to process.env if needed
-  const ACCESS_TOKEN = fbAccessToken || process.env.META_PAGE_ACCESS_TOKEN;
+  const ACCESS_TOKEN = fbAccessToken || process.env.META_ACCESS_TOKEN;
   const FB_PAGE_ID = process.env.FB_PAGE_ID;
   const IG_USER_ID = process.env.IG_USER_ID;
 

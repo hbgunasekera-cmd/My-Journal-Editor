@@ -234,6 +234,7 @@ function App() {
   const [sortCenter, setSortCenter] = useState(HomePoint);
   const [locationSource, setLocationSource] = useState('device');
   const [activePinHubId, setActivePinHubId] = useState(null);
+  const [fbToken, setFbToken] = useState("");
 
   // --- Auth & UI States ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -648,7 +649,7 @@ function App() {
     } catch (err) {
       console.error("Flipboard failed", err);
       setToast({ show: true, msg: "Flipboard failed" });
-        setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+      setTimeout(() => setToast({ show: false, msg: "" }), 3000);
     }
 
     // --- 4. OPEN FLIPBOARD ---
@@ -693,7 +694,7 @@ function App() {
     }
 
     const hashtagString = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
-    
+
     const finalDescription = `${shortDesc}\n\n📍Location: ${locationName}\n© Hasitha Gunasekera\n\n${hashtagString}`;
 
     const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(finalDescription)}`;
@@ -708,7 +709,7 @@ function App() {
     // 1. BASE CONTENT SETUP
     const locationName = p.place_name || "Island Vignette";
     const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    
+
     // Curated high-impact hashtags that best describe your site, travel niche, and gear
     const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #TravelPhotography #NatureSeekers #DronePhotography #ShotOniPhone";
 
@@ -765,55 +766,55 @@ function App() {
       setToast?.({ show: true, msg: "Mastodon Error" });
       setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
     }
-};
+  };
 
   const handleMetaShare = async (p, platform, accessToken) => {
-  if (!p) return;
+    if (!p) return;
 
-  // 1. Build context-aware metadata targets
-  const locationName = p.place_name || "Island Vignette";
-  const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
-  const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
+    // 1. Build context-aware metadata targets
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
 
-  // 2. Extract and format the clean primary text snippet from the journal story
-  const storyText = p.ai_article?.story || p.ai_article?.description || "";
-  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+    // 2. Extract and format the clean primary text snippet from the journal story
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-  // Structure clean, scannable copy for social feeds
-  const socialText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
+    // Structure clean, scannable copy for social feeds
+    const socialText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
 
-  // Notify user that the publishing sync has started
-  if (typeof setToast === 'function') {
-    setToast({ show: true, msg: `Publishing to ${platform}...` });
-  }
-
-  try {
-    // 3. Dispatch the bundle to your /api/share-meta handler
-    const response = await fetch('/api/share-meta', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        platform: platform,
-        text: socialText,
-        imageUrl: p.cover_photo_url,
-        link: shareLink,
-        fbAccessToken: accessToken // 👈 Forwards your live OAuth token to authorize the v25.0 requests
-      }),
-    });
-
-    if (response.ok) {
-      setToast?.({ show: true, msg: `Live on ${platform}!` });
-      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
-    } else {
-      const errData = await response.json();
-      throw new Error(errData.error || `Failed to post to ${platform}`);
+    // Notify user that the publishing sync has started
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: `Publishing to ${platform}...` });
     }
-  } catch (err) {
-    console.error(`${platform} Integration Error:`, err);
-    setToast?.({ show: true, msg: `Error: ${err.message}` });
-    setTimeout(() => setToast?.({ show: false, msg: "" }), 5000);
-  }
-};
+
+    try {
+      // 3. Dispatch the bundle to your /api/share-meta handler
+      const response = await fetch('/api/share-meta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: platform,
+          text: socialText,
+          imageUrl: p.cover_photo_url,
+          link: shareLink,
+          fbAccessToken: accessToken // 👈 Forwards your live OAuth token to authorize the v25.0 requests
+        }),
+      });
+
+      if (response.ok) {
+        setToast?.({ show: true, msg: `Live on ${platform}!` });
+        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+      } else {
+        const errData = await response.json();
+        throw new Error(errData.error || `Failed to post to ${platform}`);
+      }
+    } catch (err) {
+      console.error(`${platform} Integration Error:`, err);
+      setToast?.({ show: true, msg: `Error: ${err.message}` });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 5000);
+    }
+  };
 
 
   {/*
@@ -875,59 +876,59 @@ function App() {
 */}
 
   const handleTwitterPush = async (p) => {
-  if (!p) return;
+    if (!p) return;
 
-  // 1. CONTENT SETUP
-  const locationName = p.place_name || "Island Vignette";
-  const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
-  const hashtags = "#MyJournal #SriLanka #Travel";
+    // 1. CONTENT SETUP
+    const locationName = p.place_name || "Island Vignette";
+    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const hashtags = "#MyJournal #SriLanka #Travel";
 
-  // --- EXTRACT FIRST PARAGRAPH (Consistent with Mastodon/Flipboard logic) ---
-  const storyText = p.ai_article?.story || p.ai_article?.description || "";
-  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+    // --- EXTRACT FIRST PARAGRAPH (Consistent with Mastodon/Flipboard logic) ---
+    const storyText = p.ai_article?.story || p.ai_article?.description || "";
+    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-  // --- X (TWITTER) CHARACTER LIMIT HANDLING ---
-  // We target ~160 chars for description to leave room for Title, Link, and Hashtags
-  const targetLimit = 160;
-  if (shortDesc.length > targetLimit) {
-    let tempDesc = shortDesc.substring(0, targetLimit);
-    const lastPeriod = tempDesc.lastIndexOf(".");
-    // Ensure we don't cut in the middle of a short sentence
-    shortDesc = (lastPeriod > 60) ? tempDesc.substring(0, lastPeriod + 1) : tempDesc + "...";
-  }
-
-  const tweetText = `${locationName}\n\n${shortDesc}\n\n📍Location: ${shareLink}\n\n${hashtags}`;
-
-  // 2. UI FEEDBACK
-  if (typeof setToast === 'function') {
-    setToast({ show: true, msg: "Pushing to X (Processing Image)..." });
-  }
-
-  // 3. SERVER-LEVEL EXECUTION
-  try {
-    const response = await fetch('/api/share-twitter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: tweetText,
-        imageUrl: p.cover_photo_url, // The server will "grab" this URL to upload the binary
-        locationName: locationName
-      }),
-    });
-
-    if (response.ok) {
-      setToast?.({ show: true, msg: "Post live on X!" });
-      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
-    } else {
-      const errData = await response.json();
-      throw new Error(errData.error || "Twitter API Error");
+    // --- X (TWITTER) CHARACTER LIMIT HANDLING ---
+    // We target ~160 chars for description to leave room for Title, Link, and Hashtags
+    const targetLimit = 160;
+    if (shortDesc.length > targetLimit) {
+      let tempDesc = shortDesc.substring(0, targetLimit);
+      const lastPeriod = tempDesc.lastIndexOf(".");
+      // Ensure we don't cut in the middle of a short sentence
+      shortDesc = (lastPeriod > 60) ? tempDesc.substring(0, lastPeriod + 1) : tempDesc + "...";
     }
-  } catch (err) {
-    console.error("X Push Error:", err);
-    setToast?.({ show: true, msg: `X Push Failed: ${err.message}` });
-    setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
-  }
-};
+
+    const tweetText = `${locationName}\n\n${shortDesc}\n\n📍Location: ${shareLink}\n\n${hashtags}`;
+
+    // 2. UI FEEDBACK
+    if (typeof setToast === 'function') {
+      setToast({ show: true, msg: "Pushing to X (Processing Image)..." });
+    }
+
+    // 3. SERVER-LEVEL EXECUTION
+    try {
+      const response = await fetch('/api/share-twitter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: tweetText,
+          imageUrl: p.cover_photo_url, // The server will "grab" this URL to upload the binary
+          locationName: locationName
+        }),
+      });
+
+      if (response.ok) {
+        setToast?.({ show: true, msg: "Post live on X!" });
+        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+      } else {
+        const errData = await response.json();
+        throw new Error(errData.error || "Twitter API Error");
+      }
+    } catch (err) {
+      console.error("X Push Error:", err);
+      setToast?.({ show: true, msg: `X Push Failed: ${err.message}` });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
+    }
+  };
 
 
   const triggerToast = (msg) => {
@@ -2427,7 +2428,10 @@ function App() {
                         </button>
 
                         {/* Instagram */}
-                        <button onClick={() => handleMetaShare(p, 'instagram')} className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-pink-600 border border-slate-200 rounded-xl hover:bg-gradient-to-tr hover:from-amber-400 hover:via-rose-500 hover:to-fuchsia-600 hover:text-white transition-all shadow-sm">
+                        <button
+                          onClick={() => handleMetaShare(p, 'instagram', fbToken)}
+                          className="flex flex-col items-center justify-center gap-1 py-2 bg-white text-pink-600 border border-slate-200 rounded-xl hover:bg-gradient-to-tr hover:from-amber-400 hover:via-rose-500 hover:to-fuchsia-600 hover:text-white transition-all shadow-sm"
+                        >
                           <Icon name="instagram" className="w-3.5 h-3.5" />
                           <span className="text-[7px] font-black uppercase tracking-tighter">Insta</span>
                         </button>
