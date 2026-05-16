@@ -773,15 +773,18 @@ function App() {
 
     // 1. Build context-aware metadata targets
     const locationName = p.place_name || "Island Vignette";
+    
+    // Generates the specific viewer link for this travel spot
     const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    
     const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
 
     // 2. Extract and format the clean primary text snippet from the journal story
     const storyText = p.ai_article?.story || p.ai_article?.description || "";
     let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-    // Structure clean, scannable copy for social feeds
-    const socialText = `${locationName}\n\n${shortDesc}\n\n${hashtags}`;
+    // 3. Structure clean, scannable copy for social feeds (Including Link)
+    const socialText = `📍 ${locationName}\n\n${shortDesc}\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
 
     // Notify user that the publishing sync has started
     if (typeof setToast === 'function') {
@@ -789,16 +792,16 @@ function App() {
     }
 
     try {
-      // 3. Dispatch the bundle to your /api/share-meta handler
+      // 4. Dispatch the bundle to your /api/share-meta handler
       const response = await fetch('/api/share-meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform: platform,
           text: socialText,
-          imageUrl: p.cover_photo_url,
+          imageUrl: p.cover_photo_url, // 👈 Explicitly attaches the Cover Photo URL payload
           link: shareLink,
-          fbAccessToken: accessToken // 👈 Forwards your live OAuth token to authorize the v25.0 requests
+          fbAccessToken: accessToken 
         }),
       });
 
