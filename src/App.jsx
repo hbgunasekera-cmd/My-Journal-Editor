@@ -259,6 +259,7 @@ function App() {
   const [locationSource, setLocationSource] = useState('device');
   const [activePinHubId, setActivePinHubId] = useState(null);
   const [fbToken, setFbToken] = useState("");
+  const [threadsToken, setThreadsToken] = useState("");
 
   // --- Auth & UI States ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
