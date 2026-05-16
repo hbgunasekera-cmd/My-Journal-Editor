@@ -939,7 +939,7 @@ function App() {
 
     // 1. CONTENT SETUP
     const locationName = p.place_name || "Island Vignette";
-    const shareLink = `https://my-journal-view.vercel.app/?place=${encodeURIComponent(locationName)}`;
+    const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
     const hashtags = "#MyJournal #SriLanka #Travel";
 
     // --- EXTRACT FIRST PARAGRAPH (Consistent with Mastodon/Flipboard logic) ---
@@ -958,35 +958,26 @@ function App() {
 
     const tweetText = `${locationName}\n\n${shortDesc}\n\n📍Location: ${shareLink}\n\n${hashtags}`;
 
-    // 2. UI FEEDBACK
-    if (typeof setToast === 'function') {
-      setToast({ show: true, msg: "Pushing to X (Processing Image)..." });
-    }
-
-    // 3. SERVER-LEVEL EXECUTION
+    // 2. COPY TO CLIPBOARD & UI FEEDBACK
     try {
-      const response = await fetch('/api/share-twitter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: tweetText,
-          imageUrl: p.cover_photo_url, // The server will "grab" this URL to upload the binary
-          locationName: locationName
-        }),
-      });
-
-      if (response.ok) {
-        setToast?.({ show: true, msg: "Post live on X!" });
+      await navigator.clipboard.writeText(tweetText);
+      if (typeof setToast === 'function') {
+        setToast({ show: true, msg: "Caption copied! Opening X..." });
         setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
-      } else {
-        const errData = await response.json();
-        throw new Error(errData.error || "Twitter API Error");
       }
     } catch (err) {
-      console.error("X Push Error:", err);
-      setToast?.({ show: true, msg: `X Push Failed: ${err.message}` });
-      setTimeout(() => setToast?.({ show: false, msg: "" }), 4000);
+      console.error("Clipboard Error:", err);
+      // Fallback toast if clipboard permissions fail
+      if (typeof setToast === 'function') {
+        setToast({ show: true, msg: "Opening X composer..." });
+        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+      }
     }
+
+    // 3. LAUNCH X COMPOSER (INTENT MODE)
+    // Opens a new tab with the text pre-loaded. The user can then paste their image manually.
+    const twitterIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+    window.open(twitterIntentUrl, '_blank', 'noopener,noreferrer');
   };
 
 
