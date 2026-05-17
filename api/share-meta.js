@@ -52,6 +52,10 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "No Media ID returned from Meta framework payload mappings." });
       }
       
+      // 💡 FIXED: Meta CDN synchronization delay window for image processing
+      // Gives Instagram time to fetch your asset via proxy before trying to publish it
+      await new Promise(resolve => setTimeout(resolve, 8000));
+      
       // Step 2: Publish the Container live
       const igPublishUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`;
       const publishRes = await fetch(igPublishUrl, {

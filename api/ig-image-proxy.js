@@ -10,8 +10,10 @@ export default async function handler(req, res) {
     // Force switch to https to avoid Google redirect loops
     let cleanUrl = url.replace(/^http:\/\//i, 'https://');
 
-    // If it's an un-parameterized Google content link, ensure it requests raw bytes
-    if (cleanUrl.includes("googleusercontent.com") && !cleanUrl.includes('=')) {
+    // Only append =s0 to Google's raw image blob endpoints (e.g., lh3.googleusercontent.com)
+    // to prevent breaking standard legacy profile or directory endpoints (like /profile/picture/0)
+    const isRawImageBlob = cleanUrl.match(/lh\d+\.googleusercontent\.com/);
+    if (isRawImageBlob && !cleanUrl.includes('=')) {
       cleanUrl = `${cleanUrl}=s0`;
     }
 
