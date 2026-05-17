@@ -793,87 +793,102 @@ function App() {
     }
   };
 
-  const handleMetaShare = async (p, platform, accessToken) => {
-    if (!p) return;
+const handleMetaShare = async (p, platform, accessToken) => {
+  if (!p) return;
 
-    // 1. Build context-aware metadata targets
-    const locationName = p.place_name || "Island Vignette";
-    const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
-    const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
+  // 1. Build context-aware metadata targets
+  const locationName = p.place_name || "Island Vignette";
+  const shareLink = `https://my-journal-viewer.vercel.app/?place=${encodeURIComponent(locationName)}`;
+  const hashtags = "#MyJournal #SriLanka #VisitSriLanka #TravelSriLanka #SriLankaDiaries #WaterfallHunting #Camping #DronePhotography #ShotOniPhone #TravelPhotography #NatureSeekers";
 
-    // 2. Extract and clean the primary text snippet from the journal story
-    const storyText = p.ai_article?.story || p.ai_article?.description || "";
-    let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
+  // 2. Extract and clean the primary text snippet from the journal story
+  const storyText = p.ai_article?.story || p.ai_article?.description || "";
+  let shortDesc = storyText ? storyText.split(/\n\s*\n/)[0].replace(/[#*]/g, '').trim() : "";
 
-    // 3. Smart grammatical truncation specifically for Threads (500-character ceiling)
-    if (platform === 'threads') {
-      const baseTemplate = `📍 ${locationName}\n\n\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
-      const maxDescLength = 500 - baseTemplate.length;
+  // 3. Smart grammatical truncation specifically for Threads (500-character ceiling)
+  if (platform === 'threads') {
+    const baseTemplate = `📍 ${locationName}\n\n\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
+    const maxDescLength = 500 - baseTemplate.length;
 
-      if (shortDesc.length > maxDescLength) {
-        const candidateZone = shortDesc.substring(0, maxDescLength);
-        
-        // Find the absolute last complete sentence marker (. ! ?) within the safe ceiling limits
-        const lastSentenceEnd = Math.max(
-          candidateZone.lastIndexOf('.'),
-          candidateZone.lastIndexOf('!'),
-          candidateZone.lastIndexOf('?')
-        );
+    if (shortDesc.length > maxDescLength) {
+      const candidateZone = shortDesc.substring(0, maxDescLength);
+      
+      // Find the absolute last complete sentence marker (. ! ?) within the safe ceiling limits
+      const lastSentenceEnd = Math.max(
+        candidateZone.lastIndexOf('.'),
+        candidateZone.lastIndexOf('!'),
+        candidateZone.lastIndexOf('?')
+      );
 
-        // If a full sentence ends within the zone, trim cleanly right there
-        if (lastSentenceEnd > 30) { 
-          shortDesc = candidateZone.substring(0, lastSentenceEnd + 1);
-        } else {
-          // Fallback: If no sentence end is found, break at the last full word instead of mid-word
-          const lastSpace = candidateZone.lastIndexOf(' ');
-          shortDesc = lastSpace > 0 
-            ? candidateZone.substring(0, lastSpace).replace(/[,;:]$/, '') + "..." 
-            : candidateZone.substring(0, maxDescLength - 3) + "...";
-        }
-      }
-    }
-
-    // 4. Structure the clean, scannable final copy
-    const socialText = `📍 ${locationName}\n\n${shortDesc}\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
-
-    // Notify user that the publishing sync has started
-    if (typeof setToast === 'function') {
-      const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
-      setToast({ show: true, msg: `Publishing to ${platformName}...` });
-    }
-
-    try {
-      // 5. Dispatch the payload bundle to your backend api endpoint route
-      const response = await fetch('/api/share-meta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform: platform,
-          text: socialText,
-          imageUrl: p.cover_photo_url,
-          link: shareLink,
-          // Dynamically matches the specific backend key expected based on platform target
-          ...(platform === 'threads'
-            ? { threadsAccessToken: accessToken }
-            : { fbAccessToken: accessToken }
-          )
-        }),
-      });
-
-      if (response.ok) {
-        const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
-        setToast?.({ show: true, msg: `Live on ${platformName}!` });
-        setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+      // If a full sentence ends within the zone, trim cleanly right there
+      if (lastSentenceEnd > 30) { 
+        shortDesc = candidateZone.substring(0, lastSentenceEnd + 1);
       } else {
-        const errData = await response.json();
-        throw new Error(errData.error || `Failed to post to ${platform}`);
+        // Fallback: If no sentence end is found, break at the last full word instead of mid-word
+        const lastSpace = candidateZone.lastIndexOf(' ');
+        shortDesc = lastSpace > 0 
+          ? candidateZone.substring(0, lastSpace).replace(/[,;:]$/, '') + "..." 
+          : candidateZone.substring(0, maxDescLength - 3) + "...";
       }
-    } catch (err) {
-      console.error(`${platform} Integration Error:`, err);
-      setToast?.({ show: true, msg: `Error: ${err.message}` });
-      setTimeout(() => setToast?.({ show: false, msg: "" }), 5000);
     }
-  };
+  }
+
+  // 4. Structure the clean, scannable final copy
+  const socialText = `📍 ${locationName}\n\n${shortDesc}\n\n🔗 Explore more entries:\n${shareLink}\n\n${hashtags}`;
+
+  // Notify user that the publishing sync has started
+  if (typeof setToast === 'function') {
+    const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
+    setToast({ show: true, msg: `Publishing to ${platformName}...` });
+  }
+
+  try {
+    // 5. Dispatch the payload bundle to your backend api endpoint route
+    const response = await fetch('/api/share-meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        platform: platform,
+        text: socialText,
+        imageUrl: p.cover_photo_url,
+        link: shareLink,
+        // 💡 FIXED: Dynamically pipes your 194-character Instagram user token 
+        // to fbAccessToken to exactly match what the serverless file looks for.
+        ...(platform === 'threads'
+          ? { threadsAccessToken: accessToken }
+          : { fbAccessToken: accessToken }
+        )
+      }),
+    });
+
+    if (response.ok) {
+      const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
+      setToast?.({ show: true, msg: `Live on ${platformName}!` });
+      setTimeout(() => setToast?.({ show: false, msg: "" }), 3000);
+    } else {
+      const errData = await response.json();
+      throw new Error(errData.error || `Failed to post to ${platform}`);
+    }
+  } catch (err) {
+    console.error(`${platform} Integration Error:`, err);
+    
+    // 💡 COGNIZANT SYSTEM FIX: Catch expired or unauthenticated session drops elegantly
+    const rawError = err.message || "";
+    let cleanMessage = `Error: ${rawError}`;
+
+    if (
+      rawError.includes("access token") || 
+      rawError.includes("session") || 
+      rawError.includes("logged out") ||
+      rawError.includes("190")
+    ) {
+      cleanMessage = "Session expired! Please re-authenticate your 60-day Instagram/Threads token.";
+    }
+
+    setToast?.({ show: true, msg: cleanMessage });
+    setTimeout(() => setToast?.({ show: false, msg: "" }), 6000);
+  }
+};
 
 
   {/*

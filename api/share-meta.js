@@ -2,25 +2,28 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
   // 1. Unpack data payloads sent by your React client
-  const { platform, text, imageUrl, link, fbAccessToken, threadsAccessToken } = req.body;
+  const { platform, text, imageUrl, fbAccessToken, threadsAccessToken } = req.body;
   
   // 2. Read global environment variables from Vercel
   const IG_USER_ID = process.env.IG_USER_ID;
-  const API_VERSION = 'v25.0';
 
   try {
     // ==========================================
-    // INSTAGRAM ROUTE
+    // INSTAGRAM ROUTE (Standalone Graph Engine)
     // ==========================================
     if (platform === 'instagram') {
+      // Prioritize the frontend parameter, fallback cleanly to your production Vercel variable
       const ACCESS_TOKEN = fbAccessToken || process.env.META_ACCESS_TOKEN;
       if (!ACCESS_TOKEN) {
         return res.status(400).json({ error: "Authorization failed: Missing Instagram token." });
       }
-      if (!IG_USER_ID) throw new Error("Missing IG_USER_ID environment variable.");
+      if (!IG_USER_ID) {
+        return res.status(400).json({ error: "Configuration failed: Missing IG_USER_ID engine variable." });
+      }
 
       // Step 1: Create Instagram Media Container
-      const igCreateUrl = `https://graph.facebook.com/${API_VERSION}/${IG_USER_ID}/media`;
+      // 💡 FIXED: Routing to graph.instagram.com isolates the action from Facebook Page boundaries
+      const igCreateUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media`;
       const createRes = await fetch(igCreateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,10 +35,10 @@ export default async function handler(req, res) {
       });
       
       const createData = await createRes.json();
-      if (createData.error) throw new Error(createData.error.message);
+      if (createData.error) throw new Error(createData.error.message || "Failed creating Instagram media container.");
       
       // Step 2: Publish the Instagram Container live
-      const igPublishUrl = `https://graph.facebook.com/${API_VERSION}/${IG_USER_ID}/media_publish`;
+      const igPublishUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`;
       const publishRes = await fetch(igPublishUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,11 +49,11 @@ export default async function handler(req, res) {
       });
 
       const publishData = await publishRes.json();
-      if (publishData.error) throw new Error(publishData.error.message);
+      if (publishData.error) throw new Error(publishData.error.message || "Failed publishing Instagram media container.");
       return res.status(200).json({ success: true, id: publishData.id });
 
     // ==========================================
-    // THREADS ROUTE
+    // THREADS ROUTE (Dedicated Threads API Engine)
     // ==========================================
     } else if (platform === 'threads') {
       const ACCESS_TOKEN = threadsAccessToken || process.env.THREADS_ACCESS_TOKEN;
@@ -72,9 +75,9 @@ export default async function handler(req, res) {
       });
 
       const createData = await createRes.json();
-      if (createData.error) throw new Error(createData.error.message);
+      if (createData.error) throw new Error(createData.error.message || "Failed creating Threads post container.");
 
-      // Crucial: Meta needs a brief processing window to download and host your cover image
+      // Crucial Meta CDN synchronization delay window
       await new Promise(resolve => setTimeout(resolve, 6000));
 
       // Step 2: Publish the Threads Container live
@@ -89,7 +92,7 @@ export default async function handler(req, res) {
       });
 
       const publishData = await publishRes.json();
-      if (publishData.error) throw new Error(publishData.error.message);
+      if (publishData.error) throw new Error(publishData.error.message || "Failed finalizing Threads post deployment.");
       return res.status(200).json({ success: true, id: publishData.id });
     }
 
@@ -97,6 +100,13 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Meta API Architecture Error:", error);
-    return res.status(500).json({ error: error.message });
+    
+    // Catch-all translation layer for frontend toasts when tokens naturally expire
+    let clientErrorMessage = error.message;
+    if (clientErrorMessage.includes("access token") || clientErrorMessage.includes("session")) {
+      clientErrorMessage = "The session has invalidated. Please check or renew your 60-day authorization tokens.";
+    }
+    
+    return res.status(500).json({ error: clientErrorMessage });
   }
 }
