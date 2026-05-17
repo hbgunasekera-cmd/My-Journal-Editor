@@ -9,10 +9,36 @@ export default async function handler(req, res) {
 
   try {
     // ==========================================
+    // DYNAMIC GOOGLE PHOTOS RESOLVER (Global Asset Fix)
+    // ==========================================
+    let finalImageUrl = imageUrl;
+    
+    if (imageUrl && (imageUrl.includes("photos.app.goo.gl") || imageUrl.includes("googleusercontent.com/photos.google.com"))) {
+      try {
+        // Fetch the raw HTML wrapper page using a lightweight browser User-Agent header string
+        const googleRes = await fetch(imageUrl, { 
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } 
+        });
+        const htmlText = await googleRes.text();
+        
+        // Regex extracts the direct underlying static hosting source address from Google's OpenGraph content properties
+        const match = htmlText.match(/https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_\-]+/);
+        
+        if (match && match[0]) {
+          // Force high-resolution layout override dimensions optimized for Instagram and Threads canvas rules
+          finalImageUrl = `${match[0]}=w2400-h1600`;
+        } else {
+          console.warn("Regex fallback: Could not identify direct image reference stream in Google Photos wrapper.");
+        }
+      } catch (gErr) {
+        console.error("Google Photos Stream Extractions Failed:", gErr);
+      }
+    }
+
+    // ==========================================
     // INSTAGRAM ROUTE (Standalone Graph Engine)
     // ==========================================
     if (platform === 'instagram') {
-      // Prioritize the frontend parameter, fallback cleanly to your production Vercel variable
       const ACCESS_TOKEN = fbAccessToken || process.env.META_ACCESS_TOKEN;
       if (!ACCESS_TOKEN) {
         return res.status(400).json({ error: "Authorization failed: Missing Instagram token." });
@@ -27,7 +53,7 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image_url: imageUrl,
+          image_url: finalImageUrl, // 💡 Uses transformed direct binary image source
           caption: text,
           access_token: ACCESS_TOKEN
         })
@@ -35,7 +61,6 @@ export default async function handler(req, res) {
       
       const createData = await createRes.json();
       
-      // 💡 DETAILED CATCH MECHANISM: Intercept specific container validation structural failures instantly
       if (createData.error) {
         console.error("Instagram Container Creation Detailed Failure:", createData.error);
         throw new Error(`Container Creation Failed: ${createData.error.message} (Code: ${createData.error.code})`);
@@ -76,7 +101,7 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           media_type: 'IMAGE',
-          image_url: imageUrl,
+          image_url: finalImageUrl, // 💡 Uses transformed direct binary image source
           text: text,
           access_token: ACCESS_TOKEN
         })
@@ -109,7 +134,6 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Meta API Architecture Error:", error);
     
-    // Catch-all translation layer for frontend toasts when tokens naturally expire
     let clientErrorMessage = error.message;
     if (clientErrorMessage.includes("access token") || clientErrorMessage.includes("session")) {
       clientErrorMessage = "The session has invalidated. Please check or renew your 60-day authorization tokens.";
