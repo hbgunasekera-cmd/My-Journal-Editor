@@ -22,7 +22,6 @@ export default async function handler(req, res) {
       }
 
       // Step 1: Create Instagram Media Container
-      // 💡 FIXED: Routing to graph.instagram.com isolates the action from Facebook Page boundaries
       const igCreateUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media`;
       const createRes = await fetch(igCreateUrl, {
         method: 'POST',
@@ -35,7 +34,16 @@ export default async function handler(req, res) {
       });
       
       const createData = await createRes.json();
-      if (createData.error) throw new Error(createData.error.message || "Failed creating Instagram media container.");
+      
+      // 💡 DETAILED CATCH MECHANISM: Intercept specific container validation structural failures instantly
+      if (createData.error) {
+        console.error("Instagram Container Creation Detailed Failure:", createData.error);
+        throw new Error(`Container Creation Failed: ${createData.error.message} (Code: ${createData.error.code})`);
+      }
+      
+      if (!createData.id) {
+        throw new Error("Instagram rejected asset parameters. Ensure image URL is fully public and uses a valid aspect ratio.");
+      }
       
       // Step 2: Publish the Instagram Container live
       const igPublishUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`;
