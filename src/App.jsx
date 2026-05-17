@@ -839,7 +839,7 @@ const handleMetaShare = async (p, platform, accessToken) => {
   // Notify user that the publishing sync has started
   if (typeof setToast === 'function') {
     const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
-    setToast({ show: true, msg: `Publishing to ${platformName}...` });
+    setToast({ show: true, msg: `Publishing to ${platformName}` });
   }
 
   try {
