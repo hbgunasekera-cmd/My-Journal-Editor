@@ -7,29 +7,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    let targetUrl = url;
-
-    // 1. If it's a short link, follow the redirects to find the real destination page
-    if (url.includes("photos.app.goo.gl")) {
-      const redirectRes = await fetch(url, { method: 'HEAD', redirect: 'follow' });
-      targetUrl = redirectRes.url;
-    }
-
-    // 2. Download the destination page HTML using a clean browser signature
-    const pageRes = await fetch(targetUrl, {
+    // 1. Fetch the raw HTML body text stream. Standard GET inherently handles Google redirects natively.
+    const pageRes = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
       }
     });
 
     if (!pageRes.ok) {
-      throw new Error(`Failed to load Google Photos page metadata: ${pageRes.statusText}`);
+      throw new Error(`Failed to load Google Photos page metadata: ${pageRes.status} ${pageRes.statusText}`);
     }
 
     const htmlText = await pageRes.text();
 
-    // 3. Extract the high-resolution OpenGraph image meta tag used by Google for previews
-    // This extracts the absolute direct link to the image binary data stream
+    // 2. Extract the high-res OpenGraph metadata image property tag
+    // This targets Google's direct CDN location string (<meta property="og:image" content="...">)
     const ogImageMatch = htmlText.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
                         htmlText.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
 
@@ -37,37 +33,40 @@ export default async function handler(req, res) {
     if (ogImageMatch && ogImageMatch[1]) {
       binaryImageUrl = ogImageMatch[1];
     } else {
-      // Fallback regex if the OpenGraph tag layout varies
+      // Fallback: search for direct user content address markers if OpenGraph tags match dynamically
       const fallbackMatch = htmlText.match(/https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_\-]+/);
       if (fallbackMatch) binaryImageUrl = fallbackMatch[0];
     }
 
     if (!binaryImageUrl) {
+      console.error("HTML Structure Analysis Failed. Received HTML Snippet:", htmlText.substring(0, 500));
       throw new Error("Could not extract raw image stream from Google Photos layout data.");
     }
 
-    // 4. Force optimal dimensions for Instagram/Threads canvas rules (=w2400-h1600)
-    if (!binaryImageUrl.includes("=w")) {
-      binaryImageUrl = `${binaryImageUrl}=w2400-h1600`;
-    }
+    // 3. Strip any old resizing parameters and force optimal high-res dimensions
+    // Google Photos URLs often end with =w... or =s... to scale previews down.
+    const cleanBaseUrl = binaryImageUrl.split('=')[0];
+    const finalBinaryUrl = `${cleanBaseUrl}=w2400-h1600`;
 
-    // 5. Download the actual binary photo bytes
-    const imageResp = await fetch(binaryImageUrl, {
+    // 4. Download the actual photo binary bytes using your functional Mastodon-style engine approach
+    const imageResp = await fetch(finalBinaryUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
-    if (!imageResp.ok) throw new Error("Failed fetching image file data stream.");
+    if (!imageResp.ok) throw new Error(`Failed fetching image file data stream: ${imageResp.statusText}`);
 
     const arrayBuffer = await imageResp.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 6. Return the clean binary file straight to Meta's ingestion bot
+    // 5. Send the clean binary image block stream straight to Meta's ingestion scraper
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=86400, must-revalidate');
     return res.send(buffer);
 
   } catch (error) {
     console.error("Proxy Processing Failure:", error.message);
+    // Explicitly return plain text so Meta can interpret structural script issues inside your Vercel logs
+    res.setHeader('Content-Type', 'text/plain');
     return res.status(500).send(`Proxy Error: ${error.message}`);
   }
 }
