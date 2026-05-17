@@ -9,26 +9,35 @@ export default async function handler(req, res) {
 
   try {
     // ==========================================
-    // DYNAMIC GOOGLE PHOTOS RESOLVER (Global Asset Fix)
+    // DYNAMIC GOOGLE PHOTOS RESOLVER (Optimized)
     // ==========================================
     let finalImageUrl = imageUrl;
     
-    if (imageUrl && (imageUrl.includes("photos.app.goo.gl") || imageUrl.includes("googleusercontent.com/photos.google.com"))) {
+    if (imageUrl && imageUrl.includes("photos.app.goo.gl")) {
       try {
-        // Fetch the raw HTML wrapper page using a lightweight browser User-Agent header string
-        const googleRes = await fetch(imageUrl, { 
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } 
+        // Step A: Chase the short URL redirects using a lightweight HEAD request to read destination flags
+        const redirectRes = await fetch(imageUrl, { 
+          method: 'HEAD', 
+          redirect: 'follow' 
         });
-        const htmlText = await googleRes.text();
-        
-        // Regex extracts the direct underlying static hosting source address from Google's OpenGraph content properties
-        const match = htmlText.match(/https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_\-]+/);
-        
-        if (match && match[0]) {
-          // Force high-resolution layout override dimensions optimized for Instagram and Threads canvas rules
-          finalImageUrl = `${match[0]}=w2400-h1600`;
-        } else {
-          console.warn("Regex fallback: Could not identify direct image reference stream in Google Photos wrapper.");
+        const longUrl = redirectRes.url; 
+
+        // Step B: If the location leads to a valid googleusercontent web cluster, scrape the high-res fallback binary asset
+        if (longUrl && (longUrl.includes("googleusercontent.com") || longUrl.includes("photos.google.com"))) {
+          const googleRes = await fetch(longUrl, { 
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } 
+          });
+          const htmlText = await googleRes.text();
+          
+          // Regex isolates the direct immutable link to the file stream used by Meta CDN pipelines
+          const match = htmlText.match(/https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_\-]+/);
+          
+          if (match && match[0]) {
+            // Force high-resolution layout override dimensions optimized for Instagram and Threads canvas rules
+            finalImageUrl = `${match[0]}=w2400-h1600`;
+          } else {
+            console.warn("Regex fallback: Could not identify direct image reference stream in Google Photos wrapper.");
+          }
         }
       } catch (gErr) {
         console.error("Google Photos Stream Extractions Failed:", gErr);
