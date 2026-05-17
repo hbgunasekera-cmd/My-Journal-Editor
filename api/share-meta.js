@@ -1,60 +1,24 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-  // 1. Unpack data payloads sent by your React client
   const { platform, text, imageUrl, fbAccessToken, threadsAccessToken } = req.body;
-  
-  // 2. Read global environment variables from Vercel
   const IG_USER_ID = process.env.IG_USER_ID;
 
   try {
-    // ==========================================
-    // DYNAMIC GOOGLE PHOTOS RESOLVER (Optimized)
-    // ==========================================
-    let finalImageUrl = imageUrl;
+    // 🔥 THE MASTER FIX: Create a direct proxy link using your own Vercel server
+    // Note: Vercel automatically provides the host header in production
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers.host; 
     
-    if (imageUrl && imageUrl.includes("photos.app.goo.gl")) {
-      try {
-        // Step A: Chase the short URL redirects using a lightweight HEAD request to read destination flags
-        const redirectRes = await fetch(imageUrl, { 
-          method: 'HEAD', 
-          redirect: 'follow' 
-        });
-        const longUrl = redirectRes.url; 
-
-        // Step B: If the location leads to a valid googleusercontent web cluster, scrape the high-res fallback binary asset
-        if (longUrl && (longUrl.includes("googleusercontent.com") || longUrl.includes("photos.google.com"))) {
-          const googleRes = await fetch(longUrl, { 
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } 
-          });
-          const htmlText = await googleRes.text();
-          
-          // Regex isolates the direct immutable link to the file stream used by Meta CDN pipelines
-          const match = htmlText.match(/https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_\-]+/);
-          
-          if (match && match[0]) {
-            // Force high-resolution layout override dimensions optimized for Instagram and Threads canvas rules
-            finalImageUrl = `${match[0]}=w2400-h1600`;
-          } else {
-            console.warn("Regex fallback: Could not identify direct image reference stream in Google Photos wrapper.");
-          }
-        }
-      } catch (gErr) {
-        console.error("Google Photos Stream Extractions Failed:", gErr);
-      }
-    }
+    // This creates a URL that looks like: https://my-journal.vercel.app/api/ig-image-proxy?url=photos.app.goo.gl/...
+    const unblockableImageUrl = `${protocol}://${host}/api/ig-image-proxy?url=${encodeURIComponent(imageUrl)}`;
 
     // ==========================================
-    // INSTAGRAM ROUTE (Standalone Graph Engine)
+    // INSTAGRAM ROUTE
     // ==========================================
     if (platform === 'instagram') {
       const ACCESS_TOKEN = fbAccessToken || process.env.META_ACCESS_TOKEN;
-      if (!ACCESS_TOKEN) {
-        return res.status(400).json({ error: "Authorization failed: Missing Instagram token." });
-      }
-      if (!IG_USER_ID) {
-        return res.status(400).json({ error: "Configuration failed: Missing IG_USER_ID engine variable." });
-      }
+      if (!ACCESS_TOKEN) return res.status(400).json({ error: "Missing Instagram token." });
 
       // Step 1: Create Instagram Media Container
       const igCreateUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media`;
@@ -62,7 +26,7 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image_url: finalImageUrl, // 💡 Uses transformed direct binary image source
+          image_url: unblockableImageUrl, // 💡 Instagram hits your proxy, avoiding Google completely!
           caption: text,
           access_token: ACCESS_TOKEN
         })
@@ -71,15 +35,11 @@ export default async function handler(req, res) {
       const createData = await createRes.json();
       
       if (createData.error) {
-        console.error("Instagram Container Creation Detailed Failure:", createData.error);
-        throw new Error(`Container Creation Failed: ${createData.error.message} (Code: ${createData.error.code})`);
+        throw new Error(`Container Creation Failed: ${createData.error.message}`);
       }
+      if (!createData.id) throw new Error("Media ID not returned. Check proxy logs.");
       
-      if (!createData.id) {
-        throw new Error("Instagram rejected asset parameters. Ensure image URL is fully public and uses a valid aspect ratio.");
-      }
-      
-      // Step 2: Publish the Instagram Container live
+      // Step 2: Publish the Container
       const igPublishUrl = `https://graph.instagram.com/v21.0/${IG_USER_ID}/media_publish`;
       const publishRes = await fetch(igPublishUrl, {
         method: 'POST',
@@ -91,38 +51,33 @@ export default async function handler(req, res) {
       });
 
       const publishData = await publishRes.json();
-      if (publishData.error) throw new Error(publishData.error.message || "Failed publishing Instagram media container.");
+      if (publishData.error) throw new Error(publishData.error.message);
       return res.status(200).json({ success: true, id: publishData.id });
 
     // ==========================================
-    // THREADS ROUTE (Dedicated Threads API Engine)
+    // THREADS ROUTE
     // ==========================================
     } else if (platform === 'threads') {
       const ACCESS_TOKEN = threadsAccessToken || process.env.THREADS_ACCESS_TOKEN;
-      if (!ACCESS_TOKEN) {
-        return res.status(400).json({ error: "Authorization failed: Missing Threads token." });
-      }
+      if (!ACCESS_TOKEN) return res.status(400).json({ error: "Missing Threads token." });
 
-      // Step 1: Create Threads Media Container
       const threadsCreateUrl = `https://graph.threads.net/v1.0/me/threads`;
       const createRes = await fetch(threadsCreateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           media_type: 'IMAGE',
-          image_url: finalImageUrl, // 💡 Uses transformed direct binary image source
+          image_url: unblockableImageUrl, // 💡 Threads hits your proxy too!
           text: text,
           access_token: ACCESS_TOKEN
         })
       });
 
       const createData = await createRes.json();
-      if (createData.error) throw new Error(createData.error.message || "Failed creating Threads post container.");
+      if (createData.error) throw new Error(createData.error.message);
 
-      // Crucial Meta CDN synchronization delay window
       await new Promise(resolve => setTimeout(resolve, 6000));
 
-      // Step 2: Publish the Threads Container live
       const threadsPublishUrl = `https://graph.threads.net/v1.0/me/threads_publish`;
       const publishRes = await fetch(threadsPublishUrl, {
         method: 'POST',
@@ -134,20 +89,10 @@ export default async function handler(req, res) {
       });
 
       const publishData = await publishRes.json();
-      if (publishData.error) throw new Error(publishData.error.message || "Failed finalizing Threads post deployment.");
+      if (publishData.error) throw new Error(publishData.error.message);
       return res.status(200).json({ success: true, id: publishData.id });
     }
-
-    return res.status(400).json({ error: "Unsupported platform selection." });
-
   } catch (error) {
-    console.error("Meta API Architecture Error:", error);
-    
-    let clientErrorMessage = error.message;
-    if (clientErrorMessage.includes("access token") || clientErrorMessage.includes("session")) {
-      clientErrorMessage = "The session has invalidated. Please check or renew your 60-day authorization tokens.";
-    }
-    
-    return res.status(500).json({ error: clientErrorMessage });
+    return res.status(500).json({ error: error.message });
   }
 }
